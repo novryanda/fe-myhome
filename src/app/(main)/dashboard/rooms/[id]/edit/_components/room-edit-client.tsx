@@ -51,6 +51,17 @@ export function RoomEditClient({ roomId }: RoomEditClientProps) {
     // Mapping API response to form structure if necessary
     const initialData = {
         ...room,
+        description: room.description ?? "",
+        sizeDetail: room.sizeDetail ?? "",
+        facilities: (room.facilities || []).map((facility: any) => ({
+            name: facility.name ?? "",
+            tagline: facility.tagline ?? "",
+            iconUrl: facility.iconUrl ?? "",
+        })),
+        rules: (room.rules || []).map((rule: any) => ({
+            name: rule.name ?? "",
+            description: rule.description ?? "",
+        })),
         images: room.images?.map((img: any) => ({
             url: img.url,
             category: img.category

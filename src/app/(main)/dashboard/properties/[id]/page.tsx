@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
     Building2, MapPin, Loader2, CheckCircle2, XCircle,
     Clock, Plus, LayoutGrid, Bed, DollarSign,
-    ArrowLeft, Trash, PowerOff
+    ArrowLeft, Trash, PowerOff, ImagePlus
 } from "lucide-react";
 import {
     AlertDialog,
@@ -154,6 +154,18 @@ export default function PropertyDetailPage() {
                                 </Button>
                             )}
                         </div>
+                    )}
+
+                    {/* Common Delete Action: Admin Owner or Superadmin */}
+                    {(isSuperadmin || propertyData.adminId === user?.id) && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-2"
+                            onClick={() => router.push(`/dashboard/properties/${id}/images`)}
+                        >
+                            <ImagePlus className="mr-2 h-4 w-4" /> Edit Foto
+                        </Button>
                     )}
 
                     {/* Common Delete Action: Admin Owner or Superadmin */}

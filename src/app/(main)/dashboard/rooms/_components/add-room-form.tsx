@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -99,11 +99,53 @@ interface AddRoomFormProps {
 export default function AddRoomForm({ initialData }: AddRoomFormProps) {
     const isEditMode = !!initialData;
     const router = useRouter();
+    const queryClient = useQueryClient();
+
+    const normalizeOptionalText = (value?: string | null) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : null;
+    };
+
+    const normalizeOptionalUrl = (value?: string | null) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : null;
+    };
+
+    const normalizeOptionalPrice = (enabled: boolean, value?: number | null) => {
+        if (!enabled) return null;
+        return value == null || Number.isNaN(Number(value)) ? null : Number(value);
+    };
+
+    const normalizedInitialData = initialData
+        ? {
+              ...initialData,
+              description: initialData.description ?? "",
+              sizeDetail: initialData.sizeDetail ?? "",
+              facilities: (initialData.facilities || []).map((facility) => ({
+                  name: facility.name ?? "",
+                  tagline: facility.tagline ?? "",
+                  iconUrl: facility.iconUrl ?? "",
+              })),
+              rules: (initialData.rules || []).map((rule) => ({
+                  name: rule.name ?? "",
+                  description: rule.description ?? "",
+              })),
+              images: (initialData.images || []).map((image) => ({
+                  url: image.url,
+                  category: image.category,
+              })),
+              weeklyPrice: initialData.weeklyPrice ?? null,
+              monthlyPrice: initialData.monthlyPrice ?? null,
+              price3Monthly: initialData.price3Monthly ?? null,
+              yearlyPrice: initialData.yearlyPrice ?? null,
+              depositAmount: initialData.depositAmount ?? null,
+          }
+        : null;
 
     const form = useForm<RoomTypeFormValues>({
         resolver: zodResolver(roomTypeFormSchema),
-        defaultValues: initialData
-            ? { ...initialData, images: initialData.images || [] }
+        defaultValues: normalizedInitialData
+            ? normalizedInitialData
             : {
                   propertyId: "",
                   name: "",
@@ -146,13 +188,40 @@ export default function AddRoomForm({ initialData }: AddRoomFormProps) {
 
     const mutation = useMutation({
         mutationFn: async (values: RoomTypeFormValues) => {
-            const payload = { ...values, totalRooms: Number(values.totalRooms) };
+            const payload = {
+                ...values,
+                description: values.description?.trim() || undefined,
+                totalRooms: Number(values.totalRooms),
+                weeklyPrice: normalizeOptionalPrice(values.isWeekly, values.weeklyPrice),
+                monthlyPrice: normalizeOptionalPrice(values.isMonthly, values.monthlyPrice),
+                price3Monthly: normalizeOptionalPrice(values.is3Monthly, values.price3Monthly),
+                yearlyPrice: normalizeOptionalPrice(values.isYearly, values.yearlyPrice),
+                depositAmount: normalizeOptionalPrice(values.isDepositRequired, values.depositAmount),
+                images: (values.images || []).map((image) => ({
+                    url: image.url,
+                    category: image.category,
+                })),
+                facilities: (values.facilities || []).map((facility) => ({
+                    name: facility.name.trim(),
+                    tagline: normalizeOptionalText(facility.tagline),
+                    iconUrl: normalizeOptionalUrl(facility.iconUrl),
+                })),
+                rules: (values.rules || []).map((rule) => ({
+                    name: rule.name.trim(),
+                    description: normalizeOptionalText(rule.description),
+                })),
+            };
+
             if (isEditMode) {
                 return (await api.patch(`/api/room-types/${initialData.id}`, payload)).data;
             }
             return (await api.post("/api/room-types", payload)).data;
         },
-        onSuccess: () => {
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["all-room-types"] }),
+                queryClient.invalidateQueries({ queryKey: ["room-type", initialData?.id] }),
+            ]);
             toast.success(isEditMode ? "Tipe Kamar berhasil diperbarui!" : "Tipe Kamar berhasil ditambahkan!");
             router.push(isEditMode ? `/dashboard/rooms/${initialData.id}/manage` : "/dashboard/rooms");
         },
@@ -193,9 +262,13 @@ export default function AddRoomForm({ initialData }: AddRoomFormProps) {
         form.setValue("facilities", current.filter((_, i) => i !== index));
     };
 
+    const handleInvalidSubmit = () => {
+        toast.error("Form belum valid. Cek kembali field yang wajib diisi.");
+    };
+
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
+            <form onSubmit={form.handleSubmit((v) => mutation.mutate(v), handleInvalidSubmit)} className="space-y-6">
                 {/* Breadcrumb */}
                 <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Link href="/dashboard/rooms" className="hover:text-foreground transition-colors">
@@ -240,7 +313,7 @@ export default function AddRoomForm({ initialData }: AddRoomFormProps) {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Pilih Properti</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger className="rounded-xl">
                                                         <SelectValue placeholder={isLoadingProperties ? "Memuat..." : "Pilih properti..."} />
@@ -278,7 +351,7 @@ export default function AddRoomForm({ initialData }: AddRoomFormProps) {
                                     <FormField control={form.control} name="genderCategory" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Kategori Gender</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
                                                 </FormControl>

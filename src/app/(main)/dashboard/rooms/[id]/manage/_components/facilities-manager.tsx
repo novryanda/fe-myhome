@@ -53,9 +53,19 @@ export function FacilitiesManager({
         defaultValues: { name: "", tagline: "", iconUrl: "" },
     });
 
+    const normalizeOptionalText = (value?: string | null) => {
+        const trimmed = value?.trim();
+        return trimmed ? trimmed : null;
+    };
+
     const addMutation = useMutation({
         mutationFn: async (values: FacilityFormValues) => {
-            const res = await api.post(`/api/room-types/${roomTypeId}/facilities`, values);
+            const payload = {
+                name: values.name.trim(),
+                tagline: normalizeOptionalText(values.tagline),
+                iconUrl: normalizeOptionalText(values.iconUrl),
+            };
+            const res = await api.post(`/api/room-types/${roomTypeId}/facilities`, payload);
             return res.data;
         },
         onSuccess: (data) => {
