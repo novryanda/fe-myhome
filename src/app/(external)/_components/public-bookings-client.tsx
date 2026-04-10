@@ -17,6 +17,24 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
+const isPaymentLinkActive = (
+  payment?: {
+    status?: string;
+    paymentUrl?: string | null;
+    expiredAt?: string | Date | null;
+  } | null,
+) => {
+  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+    return false;
+  }
+
+  if (!payment.expiredAt) {
+    return true;
+  }
+
+  return new Date(payment.expiredAt) > new Date();
+};
+
 export function PublicBookingsClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -74,93 +92,117 @@ export function PublicBookingsClient() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {bookings.map((booking: any) => (
-          <Card
-            key={booking.id}
-            className="rounded-[28px] border border-blue-100 bg-white py-0 shadow-[0_20px_60px_-30px_rgba(29,78,216,0.28)]"
-          >
-            <CardHeader className="border-b border-blue-100 bg-blue-50/60">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-xl">{booking.property?.name}</CardTitle>
-                  <CardDescription>
-                    {booking.roomType?.name} / {booking.room?.roomNumber}
-                  </CardDescription>
-                </div>
-                <Badge className="rounded-full bg-white px-3 text-blue-700 hover:bg-white">{booking.status}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5 p-5">
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-2xl bg-zinc-50 p-3">
-                  <div className="text-zinc-500">Kode Booking</div>
-                  <div className="mt-1 font-semibold text-zinc-900">{booking.bookingCode}</div>
-                </div>
-                <div className="rounded-2xl bg-zinc-50 p-3">
-                  <div className="text-zinc-500">Nominal</div>
-                  <div className="mt-1 font-semibold text-zinc-900">{currency(booking.amount)}</div>
-                </div>
-                <div className="rounded-2xl bg-zinc-50 p-3">
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <CalendarDays className="h-4 w-4" />
-                    Mulai Sewa
-                  </div>
-                  <div className="mt-1 font-semibold text-zinc-900">{dateLabel(booking.startDate)}</div>
-                </div>
-                <div className="rounded-2xl bg-zinc-50 p-3">
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <CreditCard className="h-4 w-4" />
-                    Pembayaran
-                  </div>
-                  <div className="mt-1 font-semibold text-zinc-900">{booking.latestPayment?.status || "-"}</div>
-                </div>
-              </div>
+        {bookings.map((booking: any) => {
+          const hasActivePaymentLink = isPaymentLinkActive(booking.latestPayment);
+          const latestPaymentExpired = Boolean(
+            booking.latestPayment?.status === "PENDING" &&
+              booking.latestPayment?.expiredAt &&
+              new Date(booking.latestPayment.expiredAt) <= new Date(),
+          );
+          const displayPaymentStatus = latestPaymentExpired ? "EXPIRED" : booking.latestPayment?.status || "-";
+          const canRetryInitialPayment =
+            booking.status === "PENDING_PAYMENT" ||
+            (booking.status === "EXPIRED" &&
+              (!booking.latestPayment || booking.latestPayment?.category === "BOOKING") &&
+              booking.latestPayment?.status !== "PAID");
 
-              <div className="rounded-3xl bg-blue-50/70 p-4 text-sm">
-                <div className="flex items-start gap-2 text-zinc-600">
-                  <MapPin className="mt-0.5 h-4 w-4 text-blue-700" />
+          return (
+            <Card
+              key={booking.id}
+              className="rounded-[28px] border border-blue-100 bg-white py-0 shadow-[0_20px_60px_-30px_rgba(29,78,216,0.28)]"
+            >
+              <CardHeader className="border-b border-blue-100 bg-blue-50/60">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="font-semibold text-zinc-900">{booking.property?.name}</div>
-                    <div className="mt-1">
-                      Periode aktif sampai {dateLabel(booking.currentPeriodEnd || booking.endDate)}. Next due{" "}
-                      {dateLabel(booking.nextDueDate)}.
+                    <CardTitle className="text-xl">{booking.property?.name}</CardTitle>
+                    <CardDescription>
+                      {booking.roomType?.name} / {booking.room?.roomNumber}
+                    </CardDescription>
+                  </div>
+                  <Badge className="rounded-full bg-white px-3 text-blue-700 hover:bg-white">{booking.status}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 p-5">
+                <div className="grid gap-3 text-sm sm:grid-cols-2">
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="text-zinc-500">Kode Booking</div>
+                    <div className="mt-1 font-semibold text-zinc-900">{booking.bookingCode}</div>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="text-zinc-500">Nominal</div>
+                    <div className="mt-1 font-semibold text-zinc-900">{currency(booking.amount)}</div>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="flex items-center gap-2 text-zinc-500">
+                      <CalendarDays className="h-4 w-4" />
+                      Mulai Sewa
+                    </div>
+                    <div className="mt-1 font-semibold text-zinc-900">{dateLabel(booking.startDate)}</div>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-3">
+                    <div className="flex items-center gap-2 text-zinc-500">
+                      <CreditCard className="h-4 w-4" />
+                      Pembayaran
+                    </div>
+                    <div className="mt-1 font-semibold text-zinc-900">{displayPaymentStatus}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-blue-50/70 p-4 text-sm">
+                  <div className="flex items-start gap-2 text-zinc-600">
+                    <MapPin className="mt-0.5 h-4 w-4 text-blue-700" />
+                    <div>
+                      <div className="font-semibold text-zinc-900">{booking.property?.name}</div>
+                      <div className="mt-1">
+                        Periode aktif sampai {dateLabel(booking.currentPeriodEnd || booking.endDate)}. Next due{" "}
+                        {dateLabel(booking.nextDueDate)}.
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                {booking.status === "PENDING_PAYMENT" ? (
-                  <>
+                <div className="flex flex-wrap gap-2">
+                  {canRetryInitialPayment ? (
+                    <>
+                      <Button
+                        className="rounded-full bg-blue-700 hover:bg-blue-700"
+                        onClick={() => router.push(`/my-bookings/${booking.id}/payment`)}
+                      >
+                        {booking.status === "EXPIRED" ? "Buat Ulang Pembayaran" : "Bayar Sekarang"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => cancelBooking.mutate(booking.id)}
+                        disabled={booking.status !== "PENDING_PAYMENT"}
+                      >
+                        Batalkan
+                      </Button>
+                    </>
+                  ) : null}
+                  {booking.status === "ACTIVE" && booking.isSubscription ? (
                     <Button
-                      className="rounded-full bg-blue-700 hover:bg-blue-700"
+                      variant="outline"
+                      className="rounded-full"
                       onClick={() => router.push(`/my-bookings/${booking.id}/payment`)}
                     >
-                      Bayar Sekarang
+                      Bayar Perpanjangan
                     </Button>
-                    <Button variant="outline" className="rounded-full" onClick={() => cancelBooking.mutate(booking.id)}>
-                      Batalkan
+                  ) : null}
+                  {hasActivePaymentLink ? (
+                    <Button
+                      variant="secondary"
+                      className="rounded-full"
+                      onClick={() => router.push(`/my-bookings/${booking.id}/payment`)}
+                    >
+                      Lanjutkan Pembayaran
                     </Button>
-                  </>
-                ) : null}
-                {booking.status === "ACTIVE" && booking.isSubscription ? (
-                  <Button variant="outline" className="rounded-full" onClick={() => router.push(`/my-bookings/${booking.id}/payment`)}>
-                    Bayar Perpanjangan
-                  </Button>
-                ) : null}
-                {booking.latestPayment?.paymentUrl && booking.latestPayment?.status === "PENDING" ? (
-                  <Button
-                    variant="secondary"
-                    className="rounded-full"
-                    onClick={() => router.push(`/my-bookings/${booking.id}/payment`)}
-                  >
-                    Lanjutkan Pembayaran
-                  </Button>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {bookings.length === 0 ? (

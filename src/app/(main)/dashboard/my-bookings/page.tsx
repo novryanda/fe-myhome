@@ -15,6 +15,24 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
+const isPaymentLinkActive = (
+  payment?: {
+    status?: string;
+    paymentUrl?: string | null;
+    expiredAt?: string | Date | null;
+  } | null,
+) => {
+  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+    return false;
+  }
+
+  if (!payment.expiredAt) {
+    return true;
+  }
+
+  return new Date(payment.expiredAt) > new Date();
+};
+
 export default function MyBookingsPage() {
   const { data: session, isPending } = useSession();
   const queryClient = useQueryClient();
@@ -45,7 +63,9 @@ export default function MyBookingsPage() {
 
   const payBooking = useMutation({
     mutationFn: async ({ bookingId, renewal }: { bookingId: string; renewal?: boolean }) => {
-      const endpoint = renewal ? `/api/payments/renewals/${bookingId}/snap` : `/api/payments/bookings/${bookingId}/snap`;
+      const endpoint = renewal
+        ? `/api/payments/renewals/${bookingId}/snap`
+        : `/api/payments/bookings/${bookingId}/snap`;
       const response = await api.post(endpoint);
       return response.data;
     },
@@ -80,70 +100,97 @@ export default function MyBookingsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {bookings.map((booking: any) => (
-          <Card key={booking.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle>{booking.property?.name}</CardTitle>
-                  <CardDescription>
-                    {booking.roomType?.name} / {booking.room?.roomNumber}
-                  </CardDescription>
-                </div>
-                <Badge variant={booking.status === "ACTIVE" ? "default" : "secondary"}>{booking.status}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-muted-foreground">Kode Booking</div>
-                  <div className="font-medium">{booking.bookingCode}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Nominal Sewa</div>
-                  <div className="font-medium">{currency(booking.amount)}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Mulai</div>
-                  <div>{dateLabel(booking.startDate)}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Akhir Periode</div>
-                  <div>{dateLabel(booking.currentPeriodEnd || booking.endDate)}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Pembayaran Terakhir</div>
-                  <div>{booking.latestPayment?.status || "-"}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Next Due</div>
-                  <div>{dateLabel(booking.nextDueDate)}</div>
-                </div>
-              </div>
+        {bookings.map((booking: any) => {
+          const hasActivePaymentLink = isPaymentLinkActive(booking.latestPayment);
+          const latestPaymentExpired = Boolean(
+            booking.latestPayment?.status === "PENDING" &&
+              booking.latestPayment?.expiredAt &&
+              new Date(booking.latestPayment.expiredAt) <= new Date(),
+          );
+          const displayPaymentStatus = latestPaymentExpired ? "EXPIRED" : booking.latestPayment?.status || "-";
+          const canRetryInitialPayment =
+            booking.status === "PENDING_PAYMENT" ||
+            (booking.status === "EXPIRED" &&
+              (!booking.latestPayment || booking.latestPayment?.category === "BOOKING") &&
+              booking.latestPayment?.status !== "PAID");
 
-              <div className="flex flex-wrap gap-2">
-                {booking.status === "PENDING_PAYMENT" && (
-                  <>
-                    <Button onClick={() => payBooking.mutate({ bookingId: booking.id })}>Bayar Sekarang</Button>
-                    <Button variant="outline" onClick={() => cancelBooking.mutate(booking.id)}>
-                      Batalkan
+          return (
+            <Card key={booking.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>{booking.property?.name}</CardTitle>
+                    <CardDescription>
+                      {booking.roomType?.name} / {booking.room?.roomNumber}
+                    </CardDescription>
+                  </div>
+                  <Badge variant={booking.status === "ACTIVE" ? "default" : "secondary"}>{booking.status}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Kode Booking</div>
+                    <div className="font-medium">{booking.bookingCode}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Nominal Sewa</div>
+                    <div className="font-medium">{currency(booking.amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Mulai</div>
+                    <div>{dateLabel(booking.startDate)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Akhir Periode</div>
+                    <div>{dateLabel(booking.currentPeriodEnd || booking.endDate)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Pembayaran Terakhir</div>
+                    <div>{displayPaymentStatus}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Next Due</div>
+                    <div>{dateLabel(booking.nextDueDate)}</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {canRetryInitialPayment && (
+                    <>
+                      <Button onClick={() => payBooking.mutate({ bookingId: booking.id })}>
+                        {booking.status === "EXPIRED" ? "Buat Ulang Pembayaran" : "Bayar Sekarang"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => cancelBooking.mutate(booking.id)}
+                        disabled={booking.status !== "PENDING_PAYMENT"}
+                      >
+                        Batalkan
+                      </Button>
+                    </>
+                  )}
+                  {booking.status === "ACTIVE" && booking.isSubscription && (
+                    <Button
+                      variant="outline"
+                      onClick={() => payBooking.mutate({ bookingId: booking.id, renewal: true })}
+                    >
+                      Bayar Perpanjangan
                     </Button>
-                  </>
-                )}
-                {booking.status === "ACTIVE" && booking.isSubscription && (
-                  <Button variant="outline" onClick={() => payBooking.mutate({ bookingId: booking.id, renewal: true })}>
-                    Bayar Perpanjangan
-                  </Button>
-                )}
-                {booking.latestPayment?.paymentUrl && booking.latestPayment?.status === "PENDING" && (
-                  <Button variant="secondary" onClick={() => (window.location.href = booking.latestPayment.paymentUrl)}>
-                    Lanjutkan Pembayaran
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  )}
+                  {hasActivePaymentLink && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => (window.location.href = booking.latestPayment.paymentUrl)}
+                    >
+                      Lanjutkan Pembayaran
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

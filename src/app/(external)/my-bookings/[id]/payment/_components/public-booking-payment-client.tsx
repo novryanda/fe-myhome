@@ -27,6 +27,24 @@ const currency = (value?: number | null) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
+const isPaymentLinkActive = (
+  payment?: {
+    status?: string;
+    paymentUrl?: string | null;
+    expiredAt?: string | Date | null;
+  } | null,
+) => {
+  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+    return false;
+  }
+
+  if (!payment.expiredAt) {
+    return true;
+  }
+
+  return new Date(payment.expiredAt) > new Date();
+};
+
 export default function PublicBookingPaymentClient() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -41,7 +59,9 @@ export default function PublicBookingPaymentClient() {
 
   const payBooking = useMutation({
     mutationFn: async ({ bookingId, renewal }: { bookingId: string; renewal?: boolean }) => {
-      const endpoint = renewal ? `/api/payments/renewals/${bookingId}/snap` : `/api/payments/bookings/${bookingId}/snap`;
+      const endpoint = renewal
+        ? `/api/payments/renewals/${bookingId}/snap`
+        : `/api/payments/bookings/${bookingId}/snap`;
       const response = await api.post(endpoint);
       return response.data;
     },
@@ -64,9 +84,20 @@ export default function PublicBookingPaymentClient() {
   const booking = bookingQuery.data?.data;
   const latestPayment = booking?.latestPayment;
   const totalFirstPayment = (booking?.amount || 0) + (!booking?.depositPaid ? booking?.depositAmount || 0 : 0);
-  const hasPendingInitialPayment = latestPayment?.status === "PENDING" && latestPayment?.category === "BOOKING";
-  const hasPendingRenewalPayment = latestPayment?.status === "PENDING" && latestPayment?.category === "RENT";
-  const canPayInitial = booking?.status === "PENDING_PAYMENT";
+  const hasActivePaymentLink = isPaymentLinkActive(latestPayment);
+  const latestPaymentExpired = Boolean(
+    latestPayment?.status === "PENDING" && latestPayment?.expiredAt && new Date(latestPayment.expiredAt) <= new Date(),
+  );
+  const displayPaymentStatus = latestPaymentExpired
+    ? "EXPIRED"
+    : latestPayment?.status || "Belum ada pembayaran dibuat.";
+  const hasPendingInitialPayment = hasActivePaymentLink && latestPayment?.category === "BOOKING";
+  const hasPendingRenewalPayment = hasActivePaymentLink && latestPayment?.category === "RENT";
+  const canPayInitial =
+    booking?.status === "PENDING_PAYMENT" ||
+    (booking?.status === "EXPIRED" &&
+      (!latestPayment || latestPayment?.category === "BOOKING") &&
+      latestPayment?.status !== "PAID");
   const canPayRenewal = booking?.status === "ACTIVE" && booking?.isSubscription;
 
   if (bookingQuery.isLoading) {
@@ -124,9 +155,13 @@ export default function PublicBookingPaymentClient() {
         <section className="overflow-hidden rounded-[36px] border border-blue-100 bg-[linear-gradient(135deg,_#ffffff_0%,_#eef4ff_55%,_#ffffff_100%)] shadow-[0_24px_70px_-34px_rgba(29,78,216,0.28)]">
           <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="space-y-4">
-              <Badge className="rounded-full bg-blue-700 px-4 py-1 text-white hover:bg-blue-700">Pembayaran Booking</Badge>
+              <Badge className="rounded-full bg-blue-700 px-4 py-1 text-white hover:bg-blue-700">
+                Pembayaran Booking
+              </Badge>
               <div>
-                <h1 className="text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">{booking.property?.name}</h1>
+                <h1 className="text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
+                  {booking.property?.name}
+                </h1>
                 <p className="mt-2 text-sm text-zinc-500">
                   {booking.roomType?.name} / Kamar {booking.room?.roomNumber}
                 </p>
@@ -138,7 +173,9 @@ export default function PublicBookingPaymentClient() {
             </div>
 
             <div className="rounded-[30px] bg-blue-700 p-6 text-white shadow-[0_18px_45px_-28px_rgba(29,78,216,0.7)]">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/75">Total pembayaran awal</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/75">
+                Total pembayaran awal
+              </div>
               <div className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{currency(totalFirstPayment)}</div>
               <p className="mt-3 text-sm leading-6 text-white/75">
                 Termasuk biaya sewa {currency(booking.amount)}
@@ -213,13 +250,18 @@ export default function PublicBookingPaymentClient() {
                   <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
                   <div>
                     <div className="font-semibold text-zinc-950">Status pembayaran terakhir</div>
-                    <div className="mt-1 text-zinc-500">{latestPayment?.status || "Belum ada pembayaran dibuat."}</div>
+                    <div className="mt-1 text-zinc-500">{displayPaymentStatus}</div>
                   </div>
                 </div>
               </div>
 
               {canPayInitial ? (
                 <>
+                  {latestPaymentExpired && latestPayment?.category === "BOOKING" ? (
+                    <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                      Link pembayaran sebelumnya sudah expired. Klik tombol di bawah untuk membuat link Midtrans baru.
+                    </div>
+                  ) : null}
                   {hasPendingInitialPayment && latestPayment?.paymentUrl ? (
                     <Button
                       className="w-full rounded-full bg-blue-700 hover:bg-blue-700"
@@ -238,17 +280,25 @@ export default function PublicBookingPaymentClient() {
                       disabled={payBooking.isPending}
                       onClick={() => payBooking.mutate({ bookingId: booking.id })}
                     >
-                      Buat Pembayaran Midtrans
+                      {latestPaymentExpired || booking.status === "EXPIRED"
+                        ? "Buat Ulang Pembayaran"
+                        : "Buat Pembayaran Midtrans"}
                       <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   )}
 
                   <p className="text-center text-sm leading-6 text-zinc-500">
-                    Setelah tombol ditekan, Anda akan diarahkan ke halaman checkout Midtrans untuk menyelesaikan pembayaran.
+                    Setelah tombol ditekan, Anda akan diarahkan ke halaman checkout Midtrans untuk menyelesaikan
+                    pembayaran.
                   </p>
                 </>
               ) : canPayRenewal ? (
                 <>
+                  {latestPaymentExpired && latestPayment?.category === "RENT" ? (
+                    <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                      Link perpanjangan sebelumnya sudah expired. Buat link baru untuk melanjutkan pembayaran.
+                    </div>
+                  ) : null}
                   <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                     Booking ini sudah aktif. Anda dapat membuat pembayaran perpanjangan melalui Midtrans.
                   </div>
@@ -270,13 +320,16 @@ export default function PublicBookingPaymentClient() {
                       disabled={payBooking.isPending}
                       onClick={() => payBooking.mutate({ bookingId: booking.id, renewal: true })}
                     >
-                      Buat Pembayaran Perpanjangan
+                      {latestPaymentExpired ? "Buat Link Perpanjangan Baru" : "Buat Pembayaran Perpanjangan"}
                       <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   )}
 
                   <Link href="/my-bookings" className="block">
-                    <Button variant="outline" className="w-full rounded-full border-blue-200 text-blue-700 hover:bg-blue-50">
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-full border-blue-200 text-blue-700 hover:bg-blue-50"
+                    >
                       Lihat Pesanan Saya
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
