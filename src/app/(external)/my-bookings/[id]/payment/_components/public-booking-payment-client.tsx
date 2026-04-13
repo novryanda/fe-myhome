@@ -32,9 +32,10 @@ const isPaymentLinkActive = (
     status?: string;
     paymentUrl?: string | null;
     expiredAt?: string | Date | null;
+    amountMatchesCurrentPricing?: boolean;
   } | null,
 ) => {
-  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+  if (!payment?.paymentUrl || payment.status !== "PENDING" || payment.amountMatchesCurrentPricing === false) {
     return false;
   }
 
@@ -83,14 +84,20 @@ export default function PublicBookingPaymentClient() {
 
   const booking = bookingQuery.data?.data;
   const latestPayment = booking?.latestPayment;
-  const totalFirstPayment = (booking?.amount || 0) + (!booking?.depositPaid ? booking?.depositAmount || 0 : 0);
+  const rentAmount = booking?.currentRentAmount ?? booking?.amount ?? 0;
+  const depositAmount = booking?.currentDepositAmount ?? booking?.depositAmount ?? 0;
+  const totalFirstPayment = rentAmount + (!booking?.depositPaid ? depositAmount : 0);
+  const renewalAmount = booking?.currentRenewalAmount ?? rentAmount;
   const hasActivePaymentLink = isPaymentLinkActive(latestPayment);
+  const latestPaymentNeedsRefresh = latestPayment?.amountMatchesCurrentPricing === false;
   const latestPaymentExpired = Boolean(
     latestPayment?.status === "PENDING" && latestPayment?.expiredAt && new Date(latestPayment.expiredAt) <= new Date(),
   );
-  const displayPaymentStatus = latestPaymentExpired
-    ? "EXPIRED"
-    : latestPayment?.status || "Belum ada pembayaran dibuat.";
+  const displayPaymentStatus = latestPaymentNeedsRefresh
+    ? "UPDATE_HARGA"
+    : latestPaymentExpired
+      ? "EXPIRED"
+      : latestPayment?.status || "Belum ada pembayaran dibuat.";
   const hasPendingInitialPayment = hasActivePaymentLink && latestPayment?.category === "BOOKING";
   const hasPendingRenewalPayment = hasActivePaymentLink && latestPayment?.category === "RENT";
   const canPayInitial =
@@ -178,8 +185,8 @@ export default function PublicBookingPaymentClient() {
               </div>
               <div className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{currency(totalFirstPayment)}</div>
               <p className="mt-3 text-sm leading-6 text-white/75">
-                Termasuk biaya sewa {currency(booking.amount)}
-                {booking.depositAmount ? ` dan deposit ${currency(booking.depositAmount)}` : ""}.
+                Termasuk biaya sewa {currency(rentAmount)}
+                {depositAmount ? ` dan deposit ${currency(depositAmount)}` : ""}.
               </p>
             </div>
           </div>
@@ -222,12 +229,12 @@ export default function PublicBookingPaymentClient() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-zinc-500">Biaya sewa</span>
-                  <span className="font-semibold text-zinc-950">{currency(booking.amount)}</span>
+                  <span className="font-semibold text-zinc-950">{currency(rentAmount)}</span>
                 </div>
-                {booking.depositAmount ? (
+                {depositAmount ? (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-zinc-500">Deposit</span>
-                    <span className="font-semibold text-zinc-950">{currency(booking.depositAmount)}</span>
+                    <span className="font-semibold text-zinc-950">{currency(depositAmount)}</span>
                   </div>
                 ) : null}
                 <Separator />
@@ -257,6 +264,11 @@ export default function PublicBookingPaymentClient() {
 
               {canPayInitial ? (
                 <>
+                  {latestPaymentNeedsRefresh && latestPayment?.category === "BOOKING" ? (
+                    <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                      Harga kamar sudah diperbarui admin. Sistem akan membuat link pembayaran baru dengan nominal terbaru.
+                    </div>
+                  ) : null}
                   {latestPaymentExpired && latestPayment?.category === "BOOKING" ? (
                     <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
                       Link pembayaran sebelumnya sudah expired. Klik tombol di bawah untuk membuat link Midtrans baru.
@@ -294,13 +306,18 @@ export default function PublicBookingPaymentClient() {
                 </>
               ) : canPayRenewal ? (
                 <>
+                  {latestPaymentNeedsRefresh && latestPayment?.category === "RENT" ? (
+                    <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                      Harga kamar sudah diperbarui admin. Buat link perpanjangan baru untuk nominal terbaru.
+                    </div>
+                  ) : null}
                   {latestPaymentExpired && latestPayment?.category === "RENT" ? (
                     <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
                       Link perpanjangan sebelumnya sudah expired. Buat link baru untuk melanjutkan pembayaran.
                     </div>
                   ) : null}
                   <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-                    Booking ini sudah aktif. Anda dapat membuat pembayaran perpanjangan melalui Midtrans.
+                    Booking ini sudah aktif. Nominal perpanjangan saat ini adalah {currency(renewalAmount)}.
                   </div>
                   {hasPendingRenewalPayment && latestPayment?.paymentUrl ? (
                     <Button

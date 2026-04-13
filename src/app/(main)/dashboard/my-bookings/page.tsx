@@ -3,11 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { api } from "@/lib/api";
-import { useSession } from "@/lib/auth-client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
 
 const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
@@ -15,14 +15,54 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
-const isPaymentLinkActive = (
-  payment?: {
-    status?: string;
-    paymentUrl?: string | null;
-    expiredAt?: string | Date | null;
-  } | null,
-) => {
-  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+type BookingPayment = {
+  status?: string;
+  category?: string;
+  paymentUrl?: string | null;
+  expiredAt?: string | Date | null;
+  amountMatchesCurrentPricing?: boolean;
+};
+
+type BookingCard = {
+  id: string;
+  bookingCode: string;
+  amount: number;
+  currentRentAmount?: number | null;
+  status: string;
+  isSubscription?: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  currentPeriodEnd?: string | Date | null;
+  nextDueDate?: string | Date | null;
+  property?: { name?: string | null } | null;
+  roomType?: { name?: string | null } | null;
+  room?: { roomNumber?: string | null } | null;
+  latestPayment?: BookingPayment | null;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+
+    if (Array.isArray(message) && message.length > 0) {
+      return message[0] || fallback;
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return fallback;
+};
+
+const isPaymentLinkActive = (payment?: BookingPayment | null) => {
+  if (!payment?.paymentUrl || payment.status !== "PENDING" || payment.amountMatchesCurrentPricing === false) {
     return false;
   }
 
@@ -56,8 +96,8 @@ export default function MyBookingsPage() {
       toast.success("Booking dibatalkan");
       queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Gagal membatalkan booking");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Gagal membatalkan booking"));
     },
   });
 
@@ -77,8 +117,8 @@ export default function MyBookingsPage() {
       }
       toast.error("Link pembayaran tidak tersedia");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Gagal membuat pembayaran");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Gagal membuat pembayaran"));
     },
   });
 
@@ -90,7 +130,7 @@ export default function MyBookingsPage() {
     );
   }
 
-  const bookings = bookingsQuery.data?.data || [];
+  const bookings = (bookingsQuery.data?.data || []) as BookingCard[];
 
   return (
     <div className="space-y-6 p-8 pt-6">
@@ -100,14 +140,20 @@ export default function MyBookingsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {bookings.map((booking: any) => {
+        {bookings.map((booking) => {
+          const rentAmount = booking.currentRentAmount ?? booking.amount;
           const hasActivePaymentLink = isPaymentLinkActive(booking.latestPayment);
+          const latestPaymentNeedsRefresh = booking.latestPayment?.amountMatchesCurrentPricing === false;
           const latestPaymentExpired = Boolean(
             booking.latestPayment?.status === "PENDING" &&
               booking.latestPayment?.expiredAt &&
               new Date(booking.latestPayment.expiredAt) <= new Date(),
           );
-          const displayPaymentStatus = latestPaymentExpired ? "EXPIRED" : booking.latestPayment?.status || "-";
+          const displayPaymentStatus = latestPaymentNeedsRefresh
+            ? "UPDATE_HARGA"
+            : latestPaymentExpired
+              ? "EXPIRED"
+              : booking.latestPayment?.status || "-";
           const canRetryInitialPayment =
             booking.status === "PENDING_PAYMENT" ||
             (booking.status === "EXPIRED" &&
@@ -135,7 +181,7 @@ export default function MyBookingsPage() {
                   </div>
                   <div>
                     <div className="text-muted-foreground">Nominal Sewa</div>
-                    <div className="font-medium">{currency(booking.amount)}</div>
+                    <div className="font-medium">{currency(rentAmount)}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Mulai</div>
@@ -181,7 +227,11 @@ export default function MyBookingsPage() {
                   {hasActivePaymentLink && (
                     <Button
                       variant="secondary"
-                      onClick={() => (window.location.href = booking.latestPayment.paymentUrl)}
+                      onClick={() => {
+                        if (booking.latestPayment?.paymentUrl) {
+                          window.location.href = booking.latestPayment.paymentUrl;
+                        }
+                      }}
                     >
                       Lanjutkan Pembayaran
                     </Button>

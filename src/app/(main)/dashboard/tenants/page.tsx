@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
@@ -35,12 +36,15 @@ type TenantRow = {
   nextDueDate?: string | Date | null;
   isSubscription: boolean;
   status: string;
+  isOverdue: boolean;
+  overdueDays: number;
 };
 
-async function fetchAllTenants(search?: string) {
+async function fetchAllTenants(search?: string, dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL") {
   const firstResponse = await api.get("/api/tenants", {
     params: {
       search,
+      dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
       page: 1,
       size: 100,
     },
@@ -54,6 +58,7 @@ async function fetchAllTenants(search?: string) {
     const response = await api.get("/api/tenants", {
       params: {
         search,
+        dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
         page,
         size: 100,
       },
@@ -69,17 +74,26 @@ export default function TenantsPage() {
   const { data: session, isPending } = useSession();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [dueStatus, setDueStatus] = useState<"ALL" | "OVERDUE" | "ON_TIME">("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isExporting, setIsExporting] = useState(false);
 
   const tenantsQuery = useQuery({
-    queryKey: ["tenants", search],
+    queryKey: ["tenants", search, dueStatus, page, pageSize],
     queryFn: async () => {
       const response = await api.get("/api/tenants", {
-        params: { search, page: 1, size: 50 },
+        params: {
+          search,
+          dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
+          page,
+          size: pageSize,
+        },
       });
       return response.data;
     },
     enabled: !!session?.user && session.user.role !== "USER",
+    placeholderData: keepPreviousData,
   });
 
   const checkOut = useMutation({
@@ -119,11 +133,22 @@ export default function TenantsPage() {
   }
 
   const tenants = (tenantsQuery.data?.data || []) as TenantRow[];
+  const tenantPaging = tenantsQuery.data?.paging;
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+
+  const handleDueStatusChange = (value: "ALL" | "OVERDUE" | "ON_TIME") => {
+    setDueStatus(value);
+    setPage(1);
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const rows = (await fetchAllTenants(search || undefined)) as TenantRow[];
+      const rows = (await fetchAllTenants(search || undefined, dueStatus)) as TenantRow[];
 
       if (!rows.length) {
         toast.error("Tidak ada data penghuni untuk diexport.");
@@ -141,6 +166,7 @@ export default function TenantsPage() {
           "Check-in": dateLabel(tenant.checkInAt),
           "Akhir Periode": dateLabel(tenant.currentPeriodEnd),
           "Next Due": dateLabel(tenant.nextDueDate),
+          "Status Tagihan": tenant.isOverdue ? `Terlambat ${tenant.overdueDays} hari` : "Aman",
           Subscription: tenant.isSubscription ? "Aktif" : "Tidak",
           Status: tenant.status,
         })),
@@ -164,18 +190,28 @@ export default function TenantsPage() {
         title="Daftar Penghuni"
         description="Penghuni aktif yang sudah check-in dan sedang menempati kamar."
         action={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
               placeholder="Cari tenant, properti, kamar..."
               className="w-[320px]"
             />
+            <Select value={dueStatus} onValueChange={(value) => handleDueStatusChange(value as typeof dueStatus)}>
+              <SelectTrigger className="w-[190px]">
+                <SelectValue placeholder="Filter tagihan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua Tagihan</SelectItem>
+                <SelectItem value="OVERDUE">Lewat Jatuh Tempo</SelectItem>
+                <SelectItem value="ON_TIME">Masih Aman</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={handleExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
               {isExporting ? "Mengexport..." : "Export Excel"}
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -184,7 +220,7 @@ export default function TenantsPage() {
           <CardTitle>Penghuni Aktif</CardTitle>
           <CardDescription>Tidak termasuk booking aktif yang belum check-in.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -194,6 +230,7 @@ export default function TenantsPage() {
                 <TableHead>Check-in</TableHead>
                 <TableHead>Akhir Periode</TableHead>
                 <TableHead>Next Due</TableHead>
+                <TableHead>Status Tagihan</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -213,7 +250,14 @@ export default function TenantsPage() {
                   </TableCell>
                   <TableCell>{dateLabel(tenant.checkInAt)}</TableCell>
                   <TableCell>{dateLabel(tenant.currentPeriodEnd)}</TableCell>
-                  <TableCell>{dateLabel(tenant.nextDueDate)}</TableCell>
+                  <TableCell className={tenant.isOverdue ? "font-medium text-amber-600" : undefined}>
+                    {dateLabel(tenant.nextDueDate)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={tenant.isOverdue ? "warning" : "success"}>
+                      {tenant.isOverdue ? `Terlambat ${tenant.overdueDays} hari` : "Aman"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={tenant.isSubscription ? "default" : "secondary"}>
                       {tenant.isSubscription ? "Aktif" : "Tidak"}
@@ -228,8 +272,71 @@ export default function TenantsPage() {
               ))}
             </TableBody>
           </Table>
+          <TenantTablePagination
+            page={page}
+            totalPages={tenantPaging?.total_page || 1}
+            pageSize={pageSize}
+            totalItems={tenantPaging?.total_items || 0}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function TenantTablePagination({
+  page,
+  totalPages,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-muted-foreground text-sm">Total {totalItems} data</div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
+          <SelectTrigger className="w-28">
+            <SelectValue placeholder="Rows" />
+          </SelectTrigger>
+          <SelectContent>
+            {[5, 10, 20, 30].map((size) => (
+              <SelectItem key={size} value={String(size)}>
+                {size} / halaman
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="text-sm">
+          Halaman {page} dari {totalPages}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+            Sebelumnya
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Berikutnya
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

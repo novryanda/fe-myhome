@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, CreditCard, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
-import { api } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { api } from "@/lib/api";
 
 const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
@@ -17,14 +18,54 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
-const isPaymentLinkActive = (
-  payment?: {
-    status?: string;
-    paymentUrl?: string | null;
-    expiredAt?: string | Date | null;
-  } | null,
-) => {
-  if (!payment?.paymentUrl || payment.status !== "PENDING") {
+type BookingPayment = {
+  status?: string;
+  category?: string;
+  paymentUrl?: string | null;
+  expiredAt?: string | Date | null;
+  amountMatchesCurrentPricing?: boolean;
+};
+
+type BookingCard = {
+  id: string;
+  bookingCode: string;
+  amount: number;
+  currentRentAmount?: number | null;
+  status: string;
+  isSubscription?: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  currentPeriodEnd?: string | Date | null;
+  nextDueDate?: string | Date | null;
+  property?: { name?: string | null } | null;
+  roomType?: { name?: string | null } | null;
+  room?: { roomNumber?: string | null } | null;
+  latestPayment?: BookingPayment | null;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
+    const message = response?.data?.message;
+
+    if (Array.isArray(message) && message.length > 0) {
+      return message[0] || fallback;
+    }
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  return fallback;
+};
+
+const isPaymentLinkActive = (payment?: BookingPayment | null) => {
+  if (!payment?.paymentUrl || payment.status !== "PENDING" || payment.amountMatchesCurrentPricing === false) {
     return false;
   }
 
@@ -57,12 +98,12 @@ export function PublicBookingsClient() {
       toast.success("Booking dibatalkan");
       queryClient.invalidateQueries({ queryKey: ["public-my-bookings"] });
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Gagal membatalkan booking");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Gagal membatalkan booking"));
     },
   });
 
-  const bookings = bookingsQuery.data?.data || [];
+  const bookings = (bookingsQuery.data?.data || []) as BookingCard[];
 
   return (
     <div className="space-y-6">
@@ -77,7 +118,7 @@ export function PublicBookingsClient() {
           <CardContent className="p-5">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Sedang aktif</div>
             <div className="mt-2 text-4xl font-black tracking-tight text-blue-700">
-              {bookings.filter((booking: any) => booking.status === "ACTIVE").length}
+              {bookings.filter((booking) => booking.status === "ACTIVE").length}
             </div>
           </CardContent>
         </Card>
@@ -85,21 +126,27 @@ export function PublicBookingsClient() {
           <CardContent className="p-5">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Menunggu bayar</div>
             <div className="mt-2 text-4xl font-black tracking-tight text-amber-600">
-              {bookings.filter((booking: any) => booking.status === "PENDING_PAYMENT").length}
+              {bookings.filter((booking) => booking.status === "PENDING_PAYMENT").length}
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {bookings.map((booking: any) => {
+        {bookings.map((booking) => {
+          const rentAmount = booking.currentRentAmount ?? booking.amount;
           const hasActivePaymentLink = isPaymentLinkActive(booking.latestPayment);
+          const latestPaymentNeedsRefresh = booking.latestPayment?.amountMatchesCurrentPricing === false;
           const latestPaymentExpired = Boolean(
             booking.latestPayment?.status === "PENDING" &&
               booking.latestPayment?.expiredAt &&
               new Date(booking.latestPayment.expiredAt) <= new Date(),
           );
-          const displayPaymentStatus = latestPaymentExpired ? "EXPIRED" : booking.latestPayment?.status || "-";
+          const displayPaymentStatus = latestPaymentNeedsRefresh
+            ? "UPDATE_HARGA"
+            : latestPaymentExpired
+              ? "EXPIRED"
+              : booking.latestPayment?.status || "-";
           const canRetryInitialPayment =
             booking.status === "PENDING_PAYMENT" ||
             (booking.status === "EXPIRED" &&
@@ -130,7 +177,7 @@ export function PublicBookingsClient() {
                   </div>
                   <div className="rounded-2xl bg-zinc-50 p-3">
                     <div className="text-zinc-500">Nominal</div>
-                    <div className="mt-1 font-semibold text-zinc-900">{currency(booking.amount)}</div>
+                    <div className="mt-1 font-semibold text-zinc-900">{currency(rentAmount)}</div>
                   </div>
                   <div className="rounded-2xl bg-zinc-50 p-3">
                     <div className="flex items-center gap-2 text-zinc-500">
