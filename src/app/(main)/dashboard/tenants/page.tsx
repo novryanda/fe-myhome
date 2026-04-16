@@ -1,15 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
@@ -22,6 +31,7 @@ const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
 const fileStamp = () => new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
+const todayInputValue = () => new Date().toISOString().slice(0, 10);
 
 type TenantRow = {
   id: string;
@@ -38,6 +48,18 @@ type TenantRow = {
   status: string;
   isOverdue: boolean;
   overdueDays: number;
+};
+
+type AssignableRoomOption = {
+  roomId: string;
+  roomNumber: string;
+  propertyId: string;
+  propertyName: string;
+  roomTypeName: string;
+  pricingOptions: Array<{
+    value: "WEEKLY" | "MONTHLY" | "THREE_MONTHLY" | "YEARLY";
+    label: string;
+  }>;
 };
 
 async function fetchAllTenants(search?: string, dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL") {
@@ -78,6 +100,14 @@ export default function TenantsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [addTenantForm, setAddTenantForm] = useState({
+    tenantEmail: "",
+    propertyId: "",
+    roomId: "",
+    startDate: todayInputValue(),
+    pricingType: "" as "" | "WEEKLY" | "MONTHLY" | "THREE_MONTHLY" | "YEARLY",
+  });
 
   const tenantsQuery = useQuery({
     queryKey: ["tenants", search, dueStatus, page, pageSize],
@@ -94,6 +124,15 @@ export default function TenantsPage() {
     },
     enabled: !!session?.user && session.user.role !== "USER",
     placeholderData: keepPreviousData,
+  });
+
+  const assignableRoomsQuery = useQuery({
+    queryKey: ["tenant-assign-options"],
+    queryFn: async () => {
+      const response = await api.get("/api/bookings/admin-assign/options");
+      return (response.data?.data || []) as AssignableRoomOption[];
+    },
+    enabled: !!session?.user && session.user.role !== "USER",
   });
 
   const checkOut = useMutation({
@@ -131,6 +170,71 @@ export default function TenantsPage() {
       toast.error(error instanceof Error ? error.message : "Gagal menandai pembayaran manual");
     },
   });
+
+  const addTenant = useMutation({
+    mutationFn: async () => {
+      const response = await api.post("/api/bookings/admin-assign", {
+        roomId: addTenantForm.roomId,
+        tenantEmail: addTenantForm.tenantEmail,
+        startDate: addTenantForm.startDate,
+        pricingType: addTenantForm.pricingType,
+        isSubscription: true,
+      });
+      return response.data?.data;
+    },
+    onSuccess: (result) => {
+      toast.success("Penghuni berhasil ditambahkan");
+      if (result?.tenantAccountCreated && result?.tenantTemporaryPassword) {
+        toast.info(`Akun tenant baru dibuat. Password sementara: ${result.tenantTemporaryPassword}`);
+      }
+
+      setIsAddTenantOpen(false);
+      setAddTenantForm({
+        tenantEmail: "",
+        propertyId: "",
+        roomId: "",
+        startDate: todayInputValue(),
+        pricingType: "",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-assign-options"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["all-room-types"] });
+      queryClient.invalidateQueries({ queryKey: ["room-type"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Gagal menambahkan penghuni");
+    },
+  });
+
+  const assignableRooms = assignableRoomsQuery.data || [];
+  const assignableProperties = useMemo(
+    () =>
+      Array.from(new Map(assignableRooms.map((room) => [room.propertyId, room.propertyName])).entries()).map(
+        ([propertyId, propertyName]) => ({
+          propertyId,
+          propertyName,
+        }),
+      ),
+    [assignableRooms],
+  );
+  const filteredAssignableRooms = useMemo(
+    () =>
+      addTenantForm.propertyId
+        ? assignableRooms.filter((room) => room.propertyId === addTenantForm.propertyId)
+        : assignableRooms,
+    [assignableRooms, addTenantForm.propertyId],
+  );
+  const selectedRoom = useMemo(
+    () => assignableRooms.find((room) => room.roomId === addTenantForm.roomId) || null,
+    [assignableRooms, addTenantForm.roomId],
+  );
+  const selectedPricingOptions = selectedRoom?.pricingOptions || [];
 
   if (isPending) {
     return (
@@ -217,6 +321,36 @@ export default function TenantsPage() {
     markManualPaid.mutate(tenant.id);
   };
 
+  const handleOpenAddTenantDialog = () => {
+    setAddTenantForm({
+      tenantEmail: "",
+      propertyId: assignableProperties.length === 1 ? assignableProperties[0].propertyId : "",
+      roomId: "",
+      startDate: todayInputValue(),
+      pricingType: "",
+    });
+    setIsAddTenantOpen(true);
+  };
+
+  const handlePropertyChange = (propertyId: string) => {
+    setAddTenantForm((prev) => ({
+      ...prev,
+      propertyId,
+      roomId: "",
+      pricingType: "",
+    }));
+  };
+
+  const handleRoomChange = (roomId: string) => {
+    const room = assignableRooms.find((item) => item.roomId === roomId);
+    setAddTenantForm((prev) => ({
+      ...prev,
+      propertyId: room?.propertyId || prev.propertyId,
+      roomId,
+      pricingType: room?.pricingOptions[0]?.value || "",
+    }));
+  };
+
   return (
     <div className="space-y-6 p-8 pt-6">
       <PageHero
@@ -243,6 +377,10 @@ export default function TenantsPage() {
             <Button variant="outline" onClick={handleExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
               {isExporting ? "Mengexport..." : "Export Excel"}
+            </Button>
+            <Button onClick={handleOpenAddTenantDialog} disabled={assignableRoomsQuery.isLoading}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Tambah Penghuni
             </Button>
           </div>
         }
@@ -331,6 +469,148 @@ export default function TenantsPage() {
           />
         </CardContent>
       </Card>
+
+      <Dialog
+        open={isAddTenantOpen}
+        onOpenChange={(open) => {
+          if (!addTenant.isPending) {
+            setIsAddTenantOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tambah Penghuni</DialogTitle>
+            <DialogDescription>
+              Masukkan email tenant, pilih kamar yang tersedia, dan tentukan tanggal masuk. Booking akan terhubung ke
+              akun user berdasarkan email tersebut.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="tenant-email">Email Tenant</Label>
+              <Input
+                id="tenant-email"
+                type="email"
+                value={addTenantForm.tenantEmail}
+                onChange={(event) => setAddTenantForm((prev) => ({ ...prev, tenantEmail: event.target.value }))}
+                placeholder="tenant@email.com"
+              />
+              <p className="text-muted-foreground text-xs">
+                Jika email belum punya akun, sistem akan membuat akun tenant baru otomatis.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="available-property">Properti</Label>
+              <Select value={addTenantForm.propertyId} onValueChange={handlePropertyChange}>
+                <SelectTrigger id="available-property">
+                  <SelectValue placeholder="Pilih properti" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignableProperties.map((property) => (
+                    <SelectItem key={property.propertyId} value={property.propertyId}>
+                      {property.propertyName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="available-room">Kamar Tersedia</Label>
+              <Select
+                value={addTenantForm.roomId}
+                onValueChange={handleRoomChange}
+                disabled={!filteredAssignableRooms.length}
+              >
+                <SelectTrigger id="available-room">
+                  <SelectValue placeholder="Pilih kamar tersedia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredAssignableRooms.map((room) => (
+                    <SelectItem key={room.roomId} value={room.roomId}>
+                      {room.roomTypeName} - {room.roomNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!filteredAssignableRooms.length ? (
+                <p className="text-muted-foreground text-xs">
+                  {addTenantForm.propertyId
+                    ? "Tidak ada kamar tersedia di properti ini."
+                    : "Pilih properti terlebih dahulu untuk melihat kamar tersedia."}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="tenant-start-date">Tanggal Masuk</Label>
+                <Input
+                  id="tenant-start-date"
+                  type="date"
+                  value={addTenantForm.startDate}
+                  max={todayInputValue()}
+                  onChange={(event) => setAddTenantForm((prev) => ({ ...prev, startDate: event.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="tenant-pricing-type">Paket Sewa</Label>
+                <Select
+                  value={addTenantForm.pricingType}
+                  onValueChange={(value) =>
+                    setAddTenantForm((prev) => ({
+                      ...prev,
+                      pricingType: value as typeof prev.pricingType,
+                    }))
+                  }
+                  disabled={!selectedPricingOptions.length}
+                >
+                  <SelectTrigger id="tenant-pricing-type">
+                    <SelectValue placeholder="Pilih paket sewa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedPricingOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {selectedRoom ? (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">
+                  {selectedRoom.propertyName} - {selectedRoom.roomTypeName}
+                </div>
+                <div className="text-muted-foreground">Unit {selectedRoom.roomNumber}</div>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddTenantOpen(false)} disabled={addTenant.isPending}>
+              Batal
+            </Button>
+            <Button
+              onClick={() => addTenant.mutate()}
+              disabled={
+                addTenant.isPending ||
+                !addTenantForm.tenantEmail ||
+                !addTenantForm.roomId ||
+                !addTenantForm.startDate ||
+                !addTenantForm.pricingType
+              }
+            >
+              {addTenant.isPending ? "Menyimpan..." : "Simpan Penghuni"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
