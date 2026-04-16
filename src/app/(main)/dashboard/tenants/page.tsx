@@ -62,6 +62,11 @@ type AssignableRoomOption = {
   }>;
 };
 
+type PropertyOption = {
+  id: string;
+  name: string;
+};
+
 async function fetchAllTenants(search?: string, dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL") {
   const firstResponse = await api.get("/api/tenants", {
     params: {
@@ -131,6 +136,24 @@ export default function TenantsPage() {
     queryFn: async () => {
       const response = await api.get("/api/bookings/admin-assign/options");
       return (response.data?.data || []) as AssignableRoomOption[];
+    },
+    enabled: !!session?.user && session.user.role !== "USER",
+  });
+
+  const propertiesQuery = useQuery({
+    queryKey: ["tenant-property-options"],
+    queryFn: async () => {
+      const response = await api.get("/api/properties", {
+        params: {
+          page: 1,
+          size: 100,
+        },
+      });
+
+      return ((response.data?.data || []) as Array<{ id: string; name: string }>).map((property) => ({
+        id: property.id,
+        name: property.name,
+      })) as PropertyOption[];
     },
     enabled: !!session?.user && session.user.role !== "USER",
   });
@@ -213,16 +236,7 @@ export default function TenantsPage() {
   });
 
   const assignableRooms = assignableRoomsQuery.data || [];
-  const assignableProperties = useMemo(
-    () =>
-      Array.from(new Map(assignableRooms.map((room) => [room.propertyId, room.propertyName])).entries()).map(
-        ([propertyId, propertyName]) => ({
-          propertyId,
-          propertyName,
-        }),
-      ),
-    [assignableRooms],
-  );
+  const propertyOptions = propertiesQuery.data || [];
   const filteredAssignableRooms = useMemo(
     () =>
       addTenantForm.propertyId
@@ -324,7 +338,7 @@ export default function TenantsPage() {
   const handleOpenAddTenantDialog = () => {
     setAddTenantForm({
       tenantEmail: "",
-      propertyId: assignableProperties.length === 1 ? assignableProperties[0].propertyId : "",
+      propertyId: propertyOptions.length === 1 ? propertyOptions[0].id : "",
       roomId: "",
       startDate: todayInputValue(),
       pricingType: "",
@@ -509,9 +523,9 @@ export default function TenantsPage() {
                   <SelectValue placeholder="Pilih properti" />
                 </SelectTrigger>
                 <SelectContent>
-                  {assignableProperties.map((property) => (
-                    <SelectItem key={property.propertyId} value={property.propertyId}>
-                      {property.propertyName}
+                  {propertyOptions.map((property) => (
+                    <SelectItem key={property.id} value={property.id}>
+                      {property.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
