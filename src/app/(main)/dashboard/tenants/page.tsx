@@ -111,6 +111,27 @@ export default function TenantsPage() {
     },
   });
 
+  const markManualPaid = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const response = await api.post(`/api/payments/renewals/${bookingId}/manual-paid`, {
+        paymentType: "TRANSFER",
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Pembayaran manual berhasil ditandai lunas");
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Gagal menandai pembayaran manual");
+    },
+  });
+
   if (isPending) {
     return (
       <div className="flex h-[calc(100vh-theme(spacing.24))] items-center justify-center">
@@ -182,6 +203,18 @@ export default function TenantsPage() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleMarkManualPaid = (tenant: TenantRow) => {
+    const confirmed = window.confirm(
+      `Tandai ${tenant.tenantName} sebagai sudah bayar manual untuk periode sewa berikutnya?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    markManualPaid.mutate(tenant.id);
   };
 
   return (
@@ -264,9 +297,22 @@ export default function TenantsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => checkOut.mutate(tenant.id)}>
-                      Check-out
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      {tenant.isOverdue ? (
+                        <Button
+                          size="sm"
+                          disabled={markManualPaid.isPending}
+                          onClick={() => handleMarkManualPaid(tenant)}
+                        >
+                          {markManualPaid.isPending && markManualPaid.variables === tenant.id
+                            ? "Memproses..."
+                            : "Tandai Sudah Bayar"}
+                        </Button>
+                      ) : null}
+                      <Button size="sm" variant="outline" onClick={() => checkOut.mutate(tenant.id)}>
+                        Check-out
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -327,12 +373,7 @@ function TenantTablePagination({
           <Button variant="outline" size="sm" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
             Sebelumnya
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages}
-          >
+          <Button variant="outline" size="sm" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
             Berikutnya
           </Button>
         </div>
