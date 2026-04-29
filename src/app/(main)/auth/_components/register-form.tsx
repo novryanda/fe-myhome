@@ -1,17 +1,20 @@
 "use client";
 
+import { useState } from "react";
+
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Building2, Loader2, UserRound } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useState } from "react";
-import { Building2, Loader2, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { useRouter, useSearchParams } from "next/navigation";
 import { getPostAuthPath } from "@/lib/auth-landing";
 
 const userSchema = z
@@ -39,6 +42,9 @@ const adminSchema = z
   });
 
 type RegisterAccountType = "USER" | "ADMIN";
+type UserFormValues = z.infer<typeof userSchema>;
+type AdminFormValues = z.infer<typeof adminSchema>;
+type RegisterFormValues = UserFormValues | AdminFormValues;
 
 export function RegisterForm({ accountType }: { accountType: RegisterAccountType }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -48,7 +54,7 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
   const isAdmin = accountType === "ADMIN";
   const schema = isAdmin ? adminSchema : userSchema;
 
-  const form = useForm<any>({
+  const form = useForm<RegisterFormValues>({
     resolver: zodResolver(schema),
     defaultValues: isAdmin
       ? {
@@ -65,27 +71,37 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
         },
   });
 
-  const onSubmit = async (values: any) => {
+  const onSubmit = async (values: RegisterFormValues) => {
     const redirectTo = searchParams.get("redirect");
     setIsLoading(true);
     try {
-      const payload = isAdmin
-        ? {
-            email: values.businessEmail,
-            password: values.password,
-            name: values.managerName,
-            role: "ADMIN",
-            callbackURL: redirectTo || "/dashboard",
-          }
-        : {
-            email: values.email,
-            password: values.password,
-            name: values.name,
-            role: "USER",
-            callbackURL: redirectTo || "/",
-          };
+      let error: { message?: string } | null = null;
 
-      const { error } = await authClient.signUp.email(payload as any);
+      if (isAdmin) {
+        const adminValues = values as AdminFormValues;
+        await api.post("/api/v1/public/register/admin", {
+          email: adminValues.businessEmail,
+          password: adminValues.password,
+          name: adminValues.managerName,
+        });
+
+        const result = await authClient.signIn.email({
+          email: adminValues.businessEmail,
+          password: adminValues.password,
+          callbackURL: redirectTo || "/dashboard",
+        });
+
+        error = result.error;
+      } else {
+        const userValues = values as UserFormValues;
+        const result = await authClient.signUp.email({
+          email: userValues.email,
+          password: userValues.password,
+          name: userValues.name,
+          callbackURL: redirectTo || "/",
+        });
+        error = result.error;
+      }
 
       if (error) {
         toast.error(error.message || "Gagal membuat akun.");
@@ -94,8 +110,13 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
         const session = await authClient.getSession();
         router.push(getPostAuthPath(session.data?.user?.role, redirectTo));
       }
-    } catch {
-      toast.error("Terjadi kesalahan saat registrasi.");
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" && error !== null && "response" in error
+          ? ((error as { response?: { data?: { message?: string; error?: string } } }).response?.data?.message ??
+            (error as { response?: { data?: { message?: string; error?: string } } }).response?.data?.error)
+          : undefined;
+      toast.error(message || "Terjadi kesalahan saat registrasi.");
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +125,9 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className={`rounded-2xl border p-4 ${isAdmin ? "border-blue-200 bg-blue-50/80" : "border-zinc-200 bg-zinc-50/80"}`}>
+        <div
+          className={`rounded-2xl border p-4 ${isAdmin ? "border-blue-200 bg-blue-50/80" : "border-zinc-200 bg-zinc-50/80"}`}
+        >
           <div className="flex items-start gap-3">
             <div className={`rounded-2xl p-2 ${isAdmin ? "bg-blue-700 text-white" : "bg-zinc-900 text-white"}`}>
               {isAdmin ? <Building2 className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
@@ -113,7 +136,7 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
               <div className="font-semibold text-zinc-950">
                 {isAdmin ? "Registrasi Mitra / Owner" : "Registrasi Pencari Kos"}
               </div>
-              <div className="mt-1 text-sm leading-6 text-zinc-600">
+              <div className="mt-1 text-sm text-zinc-600 leading-6">
                 {isAdmin
                   ? "Gunakan akun ini untuk mengelola properti, kamar, transaksi, dan pencairan dana."
                   : "Gunakan akun ini untuk booking kamar, membayar sewa, dan memantau pesanan Anda."}
@@ -144,7 +167,13 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
                 <FormItem>
                   <FormLabel>Email Bisnis</FormLabel>
                   <FormControl>
-                    <Input id="businessEmail" type="email" placeholder="owner@myhome.co.id" autoComplete="email" {...field} />
+                    <Input
+                      id="businessEmail"
+                      type="email"
+                      placeholder="owner@myhome.co.id"
+                      autoComplete="email"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -189,7 +218,13 @@ export function RegisterForm({ accountType }: { accountType: RegisterAccountType
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input id={`${accountType}-password`} type="password" placeholder="••••••••" autoComplete="new-password" {...field} />
+                <Input
+                  id={`${accountType}-password`}
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
