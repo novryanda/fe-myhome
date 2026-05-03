@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, UserPlus } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, ArrowUpDown, Download, MoveRight, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -38,13 +38,17 @@ type TenantRow = {
   tenantName: string;
   tenantEmail: string;
   tenantPhone?: string | null;
+  propertyId: string;
   propertyName: string;
+  roomId: string;
+  roomTypeId: string;
   roomTypeName: string;
   roomNumber: string;
   checkInAt?: string | Date | null;
   currentPeriodEnd?: string | Date | null;
   nextDueDate?: string | Date | null;
   isSubscription: boolean;
+  pricingType: "WEEKLY" | "MONTHLY" | "THREE_MONTHLY" | "YEARLY";
   status: string;
   isOverdue: boolean;
   overdueDays: number;
@@ -67,11 +71,17 @@ type PropertyOption = {
   name: string;
 };
 
-async function fetchAllTenants(search?: string, dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL") {
+async function fetchAllTenants(
+  search?: string,
+  dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL",
+  roomSortOrder?: "asc" | "desc",
+) {
   const firstResponse = await api.get("/api/tenants", {
     params: {
       search,
       dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
+      sortBy: roomSortOrder ? "roomNumber" : undefined,
+      sortOrder: roomSortOrder,
       page: 1,
       size: 100,
     },
@@ -86,6 +96,8 @@ async function fetchAllTenants(search?: string, dueStatus: "ALL" | "OVERDUE" | "
       params: {
         search,
         dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
+        sortBy: roomSortOrder ? "roomNumber" : undefined,
+        sortOrder: roomSortOrder,
         page,
         size: 100,
       },
@@ -102,10 +114,13 @@ export default function TenantsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dueStatus, setDueStatus] = useState<"ALL" | "OVERDUE" | "ON_TIME">("ALL");
+  const [roomSortOrder, setRoomSortOrder] = useState<"asc" | "desc" | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isExporting, setIsExporting] = useState(false);
   const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [movingTenant, setMovingTenant] = useState<TenantRow | null>(null);
+  const [moveRoomId, setMoveRoomId] = useState("");
   const [addTenantForm, setAddTenantForm] = useState({
     tenantEmail: "",
     propertyId: "",
@@ -115,12 +130,14 @@ export default function TenantsPage() {
   });
 
   const tenantsQuery = useQuery({
-    queryKey: ["tenants", search, dueStatus, page, pageSize],
+    queryKey: ["tenants", search, dueStatus, roomSortOrder, page, pageSize],
     queryFn: async () => {
       const response = await api.get("/api/tenants", {
         params: {
           search,
           dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
+          sortBy: roomSortOrder ? "roomNumber" : undefined,
+          sortOrder: roomSortOrder,
           page,
           size: pageSize,
         },
@@ -235,6 +252,34 @@ export default function TenantsPage() {
     },
   });
 
+  const moveRoom = useMutation({
+    mutationFn: async () => {
+      if (!movingTenant || !moveRoomId) {
+        throw new Error("Pilih kamar tujuan terlebih dahulu");
+      }
+
+      const response = await api.patch(`/api/bookings/${movingTenant.id}/move-room`, {
+        roomId: moveRoomId,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Penghuni berhasil dipindahkan");
+      setMovingTenant(null);
+      setMoveRoomId("");
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-assign-options"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["all-room-types"] });
+      queryClient.invalidateQueries({ queryKey: ["room-type"] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Gagal memindahkan penghuni");
+    },
+  });
+
   const assignableRooms = assignableRoomsQuery.data || [];
   const propertyOptions = propertiesQuery.data || [];
   const filteredAssignableRooms = useMemo(
@@ -249,6 +294,21 @@ export default function TenantsPage() {
     [assignableRooms, addTenantForm.roomId],
   );
   const selectedPricingOptions = selectedRoom?.pricingOptions || [];
+  const movableRooms = useMemo(
+    () =>
+      movingTenant
+        ? assignableRooms.filter(
+            (room) =>
+              room.propertyId === movingTenant.propertyId &&
+              room.pricingOptions.some((option) => option.value === movingTenant.pricingType),
+          )
+        : [],
+    [assignableRooms, movingTenant],
+  );
+  const selectedMoveRoom = useMemo(
+    () => movableRooms.find((room) => room.roomId === moveRoomId) || null,
+    [movableRooms, moveRoomId],
+  );
 
   if (isPending) {
     return (
@@ -284,10 +344,15 @@ export default function TenantsPage() {
     setPage(1);
   };
 
+  const handleRoomSortToggle = () => {
+    setRoomSortOrder((current) => (current === "asc" ? "desc" : "asc"));
+    setPage(1);
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const rows = (await fetchAllTenants(search || undefined, dueStatus)) as TenantRow[];
+      const rows = (await fetchAllTenants(search || undefined, dueStatus, roomSortOrder)) as TenantRow[];
 
       if (!rows.length) {
         toast.error("Tidak ada data penghuni untuk diexport.");
@@ -333,6 +398,11 @@ export default function TenantsPage() {
     }
 
     markManualPaid.mutate(tenant.id);
+  };
+
+  const handleOpenMoveRoomDialog = (tenant: TenantRow) => {
+    setMovingTenant(tenant);
+    setMoveRoomId("");
   };
 
   const handleOpenAddTenantDialog = () => {
@@ -411,7 +481,18 @@ export default function TenantsPage() {
               <TableRow>
                 <TableHead>Tenant</TableHead>
                 <TableHead>Properti</TableHead>
-                <TableHead>Kamar</TableHead>
+                <TableHead>
+                  <Button variant="ghost" size="sm" className="-ml-3 h-8 gap-2 px-3" onClick={handleRoomSortToggle}>
+                    Kamar
+                    {roomSortOrder === "desc" ? (
+                      <ArrowDownAZ className="h-4 w-4" />
+                    ) : roomSortOrder === "asc" ? (
+                      <ArrowUpAZ className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>Check-in</TableHead>
                 <TableHead>Akhir Periode</TableHead>
                 <TableHead>Next Due</TableHead>
@@ -461,6 +542,15 @@ export default function TenantsPage() {
                             : "Tandai Sudah Bayar"}
                         </Button>
                       ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenMoveRoomDialog(tenant)}
+                        disabled={assignableRoomsQuery.isLoading}
+                      >
+                        <MoveRight className="mr-2 h-4 w-4" />
+                        Pindah Kamar
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => checkOut.mutate(tenant.id)}>
                         Check-out
                       </Button>
@@ -483,6 +573,82 @@ export default function TenantsPage() {
           />
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!movingTenant}
+        onOpenChange={(open) => {
+          if (!open && !moveRoom.isPending) {
+            setMovingTenant(null);
+            setMoveRoomId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Pindah Kamar</DialogTitle>
+            <DialogDescription>
+              Pilih kamar kosong di properti yang sama. Harga sewa akan mengikuti tipe kamar tujuan.
+            </DialogDescription>
+          </DialogHeader>
+
+          {movingTenant ? (
+            <div className="grid gap-4 py-2">
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">{movingTenant.tenantName}</div>
+                <div className="text-muted-foreground">
+                  {movingTenant.propertyName} - {movingTenant.roomTypeName} / Unit {movingTenant.roomNumber}
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="move-room-target">Kamar Tujuan</Label>
+                <Select value={moveRoomId} onValueChange={setMoveRoomId} disabled={!movableRooms.length}>
+                  <SelectTrigger id="move-room-target">
+                    <SelectValue placeholder="Pilih kamar kosong" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {movableRooms.map((room) => (
+                      <SelectItem key={room.roomId} value={room.roomId}>
+                        {room.roomTypeName} - {room.roomNumber}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!movableRooms.length ? (
+                  <p className="text-muted-foreground text-xs">
+                    Tidak ada kamar kosong dengan paket sewa yang sama di properti ini.
+                  </p>
+                ) : null}
+              </div>
+
+              {selectedMoveRoom ? (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                  <div className="font-medium">
+                    {selectedMoveRoom.propertyName} - {selectedMoveRoom.roomTypeName}
+                  </div>
+                  <div className="text-muted-foreground">Unit {selectedMoveRoom.roomNumber}</div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMovingTenant(null);
+                setMoveRoomId("");
+              }}
+              disabled={moveRoom.isPending}
+            >
+              Batal
+            </Button>
+            <Button onClick={() => moveRoom.mutate()} disabled={moveRoom.isPending || !moveRoomId}>
+              {moveRoom.isPending ? "Memindahkan..." : "Pindahkan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isAddTenantOpen}
