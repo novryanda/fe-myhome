@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownAZ, ArrowUpAZ, ArrowUpDown, Download, MoveRight, UserPlus } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, ArrowUpDown, Banknote, Download, MoveRight, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -390,7 +390,7 @@ export default function TenantsPage() {
 
   const handleMarkManualPaid = (tenant: TenantRow) => {
     const confirmed = window.confirm(
-      `Tandai ${tenant.tenantName} sebagai sudah bayar manual untuk periode sewa berikutnya?`,
+      `Tandai ${tenant.tenantName} sudah membayar via transfer manual untuk periode sewa berikutnya?`,
     );
 
     if (!confirmed) {
@@ -531,15 +531,17 @@ export default function TenantsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {tenant.isOverdue ? (
+                      {tenant.isSubscription ? (
                         <Button
                           size="sm"
+                          variant={tenant.isOverdue ? "default" : "outline"}
                           disabled={markManualPaid.isPending}
                           onClick={() => handleMarkManualPaid(tenant)}
                         >
+                          <Banknote className="mr-2 h-4 w-4" />
                           {markManualPaid.isPending && markManualPaid.variables === tenant.id
                             ? "Memproses..."
-                            : "Tandai Sudah Bayar"}
+                            : "Tandai Bayar Manual"}
                         </Button>
                       ) : null}
                       <Button
