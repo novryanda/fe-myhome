@@ -128,10 +128,9 @@ export const sidebarItems: NavGroup[] = [
     items: [
       {
         title: "Whatsapp",
-        url: "/dashboard/coming-soon",
+        url: "/dashboard/whatsapp",
         icon: Mail,
         roles: ["SUPERADMIN"],
-        comingSoon: true,
       },
       {
         title: "Obrolan",

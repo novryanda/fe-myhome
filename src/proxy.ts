@@ -52,7 +52,7 @@ export async function proxy(req: NextRequest) {
   const userRole = session?.user?.role;
 
   // Superadmin only routes
-  const superadminOnly = ["/dashboard/user", "/dashboard/city", "/dashboard/approval-withdraw"];
+  const superadminOnly = ["/dashboard/user", "/dashboard/city", "/dashboard/approval-withdraw", "/dashboard/whatsapp"];
 
   // Admin/Owner only routes
   const adminOnly = [
