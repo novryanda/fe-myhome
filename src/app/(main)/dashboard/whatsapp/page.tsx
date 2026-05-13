@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import Image from "next/image";
 
+import { isAxiosError } from "axios";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
@@ -34,10 +35,12 @@ import { api } from "@/lib/api";
 type WhatsappOverview = {
   settings?: {
     WAHA_API_URL?: string;
+    WAHA_SESSION_NAME?: string;
     WAHA_API_KEY?: string;
   };
   configured: boolean;
   settingsReady: boolean;
+  sessionName?: string;
   session?: {
     status?: string;
     me?: unknown;
@@ -86,9 +89,28 @@ const extractConnectedNumber = (me: unknown) => {
   return typeof id === "string" ? id : "-";
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (isAxiosError(error)) {
+    const apiMessage = error.response?.data?.message;
+    if (typeof apiMessage === "string" && apiMessage.trim()) {
+      return apiMessage;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
 export default function WhatsappPage() {
   const queryClient = useQueryClient();
-  const [settings, setSettings] = useState({ WAHA_API_URL: "", WAHA_API_KEY: "" });
+  const [settings, setSettings] = useState({
+    WAHA_API_URL: "",
+    WAHA_SESSION_NAME: "superadmin",
+    WAHA_API_KEY: "",
+  });
   const [testForm, setTestForm] = useState({ recipient: "", message: "Tes pesan WhatsApp dari MyHome." });
   const [selectedTemplateCode, setSelectedTemplateCode] = useState("");
   const [templateBody, setTemplateBody] = useState("");
@@ -134,6 +156,7 @@ export default function WhatsappPage() {
     queryKey: ["whatsapp-session-qr"],
     queryFn: async () => (await api.get("/api/whatsapp/session/qr")).data?.data as { dataUrl: string },
     enabled: false,
+    retry: false,
   });
 
   const selectedTemplate = useMemo(
@@ -145,6 +168,7 @@ export default function WhatsappPage() {
     if (!overviewQuery.data?.settings) return;
     setSettings({
       WAHA_API_URL: overviewQuery.data.settings.WAHA_API_URL || "",
+      WAHA_SESSION_NAME: overviewQuery.data.settings.WAHA_SESSION_NAME || "superadmin",
       WAHA_API_KEY: overviewQuery.data.settings.WAHA_API_KEY || "",
     });
   }, [overviewQuery.data?.settings]);
@@ -170,17 +194,24 @@ export default function WhatsappPage() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-overview"] });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal menyimpan pengaturan WAHA");
+      toast.error(getErrorMessage(error, "Gagal menyimpan pengaturan WAHA"));
     },
   });
+
+  const loadQr = async () => {
+    const result = await qrQuery.refetch();
+    if (result.error) {
+      toast.error(getErrorMessage(result.error, "Gagal mengambil QR WhatsApp"));
+    }
+  };
 
   const startSession = useMutation({
     mutationFn: async () => (await api.post("/api/whatsapp/session/start")).data,
     onSuccess: async () => {
       toast.success("Sesi WhatsApp dimulai");
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["whatsapp-overview"] }), qrQuery.refetch()]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["whatsapp-overview"] }), loadQr()]);
     },
-    onError: () => toast.error("Gagal memulai sesi WAHA"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error, "Gagal memulai sesi WAHA")),
   });
 
   const logoutSession = useMutation({
@@ -189,7 +220,7 @@ export default function WhatsappPage() {
       toast.success("Sesi WhatsApp diputus");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-overview"] });
     },
-    onError: () => toast.error("Gagal memutus sesi WhatsApp"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error, "Gagal memutus sesi WhatsApp")),
   });
 
   const sendTest = useMutation({
@@ -198,7 +229,7 @@ export default function WhatsappPage() {
       toast.success("Pesan tes terkirim");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-logs"] });
     },
-    onError: () => toast.error("Gagal mengirim pesan tes"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error, "Gagal mengirim pesan tes")),
   });
 
   const saveTemplate = useMutation({
@@ -208,11 +239,12 @@ export default function WhatsappPage() {
       toast.success("Template tersimpan");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
     },
-    onError: () => toast.error("Gagal menyimpan template"),
+    onError: (error: unknown) => toast.error(getErrorMessage(error, "Gagal menyimpan template")),
   });
 
   const overview = overviewQuery.data;
   const sessionStatus = overview?.session?.status || "UNKNOWN";
+  const sessionName = overview?.sessionName || settings.WAHA_SESSION_NAME || "superadmin";
   const logs = logsQuery.data?.data || [];
   const totalLogPages = logsQuery.data?.paging?.total_page || 1;
 
@@ -242,7 +274,12 @@ export default function WhatsappPage() {
             <CardTitle className="text-xl">{sessionStatus}</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-sm">
+            Session: {sessionName}
+            <br />
             Nomor aktif: {extractConnectedNumber(overview?.session?.me)}
+            {overview?.session?.errorMessage ? (
+              <p className="mt-2 text-destructive">{overview.session.errorMessage}</p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
@@ -287,7 +324,7 @@ export default function WhatsappPage() {
               <CardHeader>
                 <CardTitle>Pengaturan WAHA</CardTitle>
                 <CardDescription>
-                  Satu sesi global bernama superadmin dipakai sebagai pengirim reminder.
+                  Gunakan nama session WAHA yang sama dengan session yang ingin dipakai sebagai pengirim reminder.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -299,6 +336,18 @@ export default function WhatsappPage() {
                     onChange={(event) => setSettings((prev) => ({ ...prev, WAHA_API_URL: event.target.value }))}
                     placeholder="http://localhost:3000"
                   />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="waha-session-name">Nama Session WAHA</Label>
+                  <Input
+                    id="waha-session-name"
+                    value={settings.WAHA_SESSION_NAME}
+                    onChange={(event) => setSettings((prev) => ({ ...prev, WAHA_SESSION_NAME: event.target.value }))}
+                    placeholder="superadmin"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Contoh: `superadmin`, `default`, atau nama session yang sudah ada di server WAHA.
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="waha-api-key">WAHA API Key</Label>
@@ -323,7 +372,7 @@ export default function WhatsappPage() {
                     )}
                     Mulai Sesi
                   </Button>
-                  <Button variant="outline" onClick={() => qrQuery.refetch()} disabled={qrQuery.isFetching}>
+                  <Button variant="outline" onClick={loadQr} disabled={qrQuery.isFetching}>
                     {qrQuery.isFetching ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
                     Ambil QR
                   </Button>
@@ -365,6 +414,11 @@ export default function WhatsappPage() {
                     QR belum dimuat.
                   </div>
                 )}
+                {qrQuery.error ? (
+                  <p className="mt-3 text-destructive text-sm">
+                    {getErrorMessage(qrQuery.error, "Gagal mengambil QR WhatsApp")}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
