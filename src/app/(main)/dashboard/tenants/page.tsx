@@ -6,6 +6,16 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { ArrowDownAZ, ArrowUpAZ, ArrowUpDown, Banknote, Download, MoveRight, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,9 +39,30 @@ import { exportRowsToExcel } from "../dashboard/_components/export-excel";
 
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
+const monthYearLabel = (value?: string | Date | null) =>
+  value ? new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(value)) : "-";
 
 const fileStamp = () => new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
 const todayInputValue = () => new Date().toISOString().slice(0, 10);
+
+const addPeriod = (startDate: Date, pricingType: TenantRow["pricingType"]) => {
+  const endDate = new Date(startDate);
+
+  if (pricingType === "WEEKLY") {
+    endDate.setDate(endDate.getDate() + 7);
+  }
+  if (pricingType === "MONTHLY") {
+    endDate.setMonth(endDate.getMonth() + 1);
+  }
+  if (pricingType === "THREE_MONTHLY") {
+    endDate.setMonth(endDate.getMonth() + 3);
+  }
+  if (pricingType === "YEARLY") {
+    endDate.setFullYear(endDate.getFullYear() + 1);
+  }
+
+  return endDate;
+};
 
 type TenantRow = {
   id: string;
@@ -119,6 +150,7 @@ export default function TenantsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [isExporting, setIsExporting] = useState(false);
   const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [manualPaymentTenant, setManualPaymentTenant] = useState<TenantRow | null>(null);
   const [movingTenant, setMovingTenant] = useState<TenantRow | null>(null);
   const [moveRoomId, setMoveRoomId] = useState("");
   const [addTenantForm, setAddTenantForm] = useState({
@@ -198,6 +230,7 @@ export default function TenantsPage() {
       return response.data;
     },
     onSuccess: () => {
+      setManualPaymentTenant(null);
       toast.success("Pembayaran manual berhasil ditandai lunas");
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
@@ -309,6 +342,25 @@ export default function TenantsPage() {
     () => movableRooms.find((room) => room.roomId === moveRoomId) || null,
     [movableRooms, moveRoomId],
   );
+  const manualPaymentPreview = useMemo(() => {
+    if (!manualPaymentTenant) {
+      return null;
+    }
+
+    const periodStart = manualPaymentTenant.currentPeriodEnd || manualPaymentTenant.nextDueDate;
+    if (!periodStart) {
+      return null;
+    }
+
+    const startDate = new Date(periodStart);
+    const endDate = addPeriod(startDate, manualPaymentTenant.pricingType);
+
+    return {
+      startDate,
+      endDate,
+      billedMonth: monthYearLabel(endDate),
+    };
+  }, [manualPaymentTenant]);
 
   if (isPending) {
     return (
@@ -388,16 +440,16 @@ export default function TenantsPage() {
     }
   };
 
-  const handleMarkManualPaid = (tenant: TenantRow) => {
-    const confirmed = window.confirm(
-      `Tandai ${tenant.tenantName} sudah membayar via transfer manual untuk periode sewa berikutnya?`,
-    );
-
-    if (!confirmed) {
+  const handleConfirmManualPaid = () => {
+    if (!manualPaymentTenant) {
       return;
     }
 
-    markManualPaid.mutate(tenant.id);
+    markManualPaid.mutate(manualPaymentTenant.id);
+  };
+
+  const handleOpenManualPaymentDialog = (tenant: TenantRow) => {
+    setManualPaymentTenant(tenant);
   };
 
   const handleOpenMoveRoomDialog = (tenant: TenantRow) => {
@@ -536,7 +588,7 @@ export default function TenantsPage() {
                           size="sm"
                           variant={tenant.isOverdue ? "default" : "outline"}
                           disabled={markManualPaid.isPending}
-                          onClick={() => handleMarkManualPaid(tenant)}
+                          onClick={() => handleOpenManualPaymentDialog(tenant)}
                         >
                           <Banknote className="mr-2 h-4 w-4" />
                           {markManualPaid.isPending && markManualPaid.variables === tenant.id
@@ -651,6 +703,76 @@ export default function TenantsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!manualPaymentTenant}
+        onOpenChange={(open) => {
+          if (!open && !markManualPaid.isPending) {
+            setManualPaymentTenant(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Konfirmasi Tandai Bayar Manual</AlertDialogTitle>
+            <AlertDialogDescription>
+              Pastikan tenant, kamar, dan periode tagihan yang akan ditandai lunas sudah benar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {manualPaymentTenant ? (
+            <div className="grid gap-4 py-1">
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+                <div className="font-medium">{manualPaymentTenant.tenantName}</div>
+                <div className="text-muted-foreground">
+                  {manualPaymentTenant.propertyName} - {manualPaymentTenant.roomTypeName} / Unit{" "}
+                  {manualPaymentTenant.roomNumber}
+                </div>
+              </div>
+
+              <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
+                <div>
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">Periode aktif saat ini</div>
+                  <div className="font-medium">Sampai {dateLabel(manualPaymentTenant.currentPeriodEnd)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Periode yang akan ditandai lunas
+                  </div>
+                  <div className="font-medium">
+                    {manualPaymentPreview
+                      ? `${dateLabel(manualPaymentPreview.startDate)} - ${dateLabel(manualPaymentPreview.endDate)}`
+                      : "Periode berikutnya belum bisa ditentukan"}
+                  </div>
+                  {manualPaymentPreview ? (
+                    <div className="text-muted-foreground text-xs">
+                      Tagihan yang akan masuk ke periode {manualPaymentPreview.billedMonth}.
+                    </div>
+                  ) : null}
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Akhir periode setelah konfirmasi
+                  </div>
+                  <div className="font-medium">
+                    {manualPaymentPreview ? dateLabel(manualPaymentPreview.endDate) : "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={markManualPaid.isPending}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={markManualPaid.isPending || !manualPaymentPreview}
+              onClick={handleConfirmManualPaid}
+            >
+              {markManualPaid.isPending ? "Memproses..." : "Ya, Tandai Lunas"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={isAddTenantOpen}
