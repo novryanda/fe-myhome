@@ -44,6 +44,15 @@ const monthYearLabel = (value?: string | Date | null) =>
 
 const fileStamp = () => new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
 const todayInputValue = () => new Date().toISOString().slice(0, 10);
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const maybeMessage = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+
+  if (typeof maybeMessage === "string" && maybeMessage) {
+    return maybeMessage;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+};
 
 const addPeriod = (startDate: Date, pricingType: TenantRow["pricingType"]) => {
   const endDate = new Date(startDate);
@@ -218,7 +227,7 @@ export default function TenantsPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal memproses check-out");
+      toast.error(getErrorMessage(error, "Gagal memproses check-out"));
     },
   });
 
@@ -240,7 +249,7 @@ export default function TenantsPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal menandai pembayaran manual");
+      toast.error(getErrorMessage(error, "Gagal menandai pembayaran manual"));
     },
   });
 
@@ -281,7 +290,7 @@ export default function TenantsPage() {
       queryClient.invalidateQueries({ queryKey: ["room-type"] });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal menambahkan penghuni");
+      toast.error(getErrorMessage(error, "Gagal menambahkan penghuni"));
     },
   });
 
@@ -309,7 +318,7 @@ export default function TenantsPage() {
       queryClient.invalidateQueries({ queryKey: ["room-type"] });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal memindahkan penghuni");
+      toast.error(getErrorMessage(error, "Gagal memindahkan penghuni"));
     },
   });
 
