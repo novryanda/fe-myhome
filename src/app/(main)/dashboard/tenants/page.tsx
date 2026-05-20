@@ -6,27 +6,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { ArrowDownAZ, ArrowUpAZ, ArrowUpDown, Banknote, Download, MoveRight, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AdminManualPaymentDialog } from "@/components/admin-manual-payment-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,6 +59,7 @@ const addPeriod = (startDate: Date, pricingType: TenantRow["pricingType"]) => {
 
 type TenantRow = {
   id: string;
+  bookingCode: string;
   tenantName: string;
   tenantEmail: string;
   tenantPhone?: string | null;
@@ -89,6 +74,7 @@ type TenantRow = {
   nextDueDate?: string | Date | null;
   isSubscription: boolean;
   pricingType: "WEEKLY" | "MONTHLY" | "THREE_MONTHLY" | "YEARLY";
+  currentRentAmount: number;
   status: string;
   isOverdue: boolean;
   overdueDays: number;
@@ -228,28 +214,6 @@ export default function TenantsPage() {
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, "Gagal memproses check-out"));
-    },
-  });
-
-  const markManualPaid = useMutation({
-    mutationFn: async (bookingId: string) => {
-      const response = await api.post(`/api/payments/renewals/${bookingId}/manual-paid`, {
-        paymentType: "TRANSFER",
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      setManualPaymentTenant(null);
-      toast.success("Pembayaran manual berhasil ditandai lunas");
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "Gagal menandai pembayaran manual"));
     },
   });
 
@@ -449,14 +413,6 @@ export default function TenantsPage() {
     }
   };
 
-  const handleConfirmManualPaid = () => {
-    if (!manualPaymentTenant) {
-      return;
-    }
-
-    markManualPaid.mutate(manualPaymentTenant.id);
-  };
-
   const handleOpenManualPaymentDialog = (tenant: TenantRow) => {
     setManualPaymentTenant(tenant);
   };
@@ -596,13 +552,10 @@ export default function TenantsPage() {
                         <Button
                           size="sm"
                           variant={tenant.isOverdue ? "default" : "outline"}
-                          disabled={markManualPaid.isPending}
                           onClick={() => handleOpenManualPaymentDialog(tenant)}
                         >
                           <Banknote className="mr-2 h-4 w-4" />
-                          {markManualPaid.isPending && markManualPaid.variables === tenant.id
-                            ? "Memproses..."
-                            : "Tandai Bayar Manual"}
+                          Tandai Bayar Manual
                         </Button>
                       ) : null}
                       <Button
@@ -713,75 +666,38 @@ export default function TenantsPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
+      <AdminManualPaymentDialog
         open={!!manualPaymentTenant}
         onOpenChange={(open) => {
-          if (!open && !markManualPaid.isPending) {
+          if (!open) {
             setManualPaymentTenant(null);
           }
         }}
-      >
-        <AlertDialogContent className="sm:max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Konfirmasi Tandai Bayar Manual</AlertDialogTitle>
-            <AlertDialogDescription>
-              Pastikan tenant, kamar, dan periode tagihan yang akan ditandai lunas sudah benar.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {manualPaymentTenant ? (
-            <div className="grid gap-4 py-1">
-              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-                <div className="font-medium">{manualPaymentTenant.tenantName}</div>
-                <div className="text-muted-foreground">
-                  {manualPaymentTenant.propertyName} - {manualPaymentTenant.roomTypeName} / Unit{" "}
-                  {manualPaymentTenant.roomNumber}
-                </div>
-              </div>
-
-              <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/80 p-4 text-sm">
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">Periode aktif saat ini</div>
-                  <div className="font-medium">Sampai {dateLabel(manualPaymentTenant.currentPeriodEnd)}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Periode yang akan ditandai lunas
-                  </div>
-                  <div className="font-medium">
-                    {manualPaymentPreview
-                      ? `${dateLabel(manualPaymentPreview.startDate)} - ${dateLabel(manualPaymentPreview.endDate)}`
-                      : "Periode berikutnya belum bisa ditentukan"}
-                  </div>
-                  {manualPaymentPreview ? (
-                    <div className="text-muted-foreground text-xs">
-                      Tagihan yang akan masuk ke periode {manualPaymentPreview.billedMonth}.
-                    </div>
-                  ) : null}
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Akhir periode setelah konfirmasi
-                  </div>
-                  <div className="font-medium">
-                    {manualPaymentPreview ? dateLabel(manualPaymentPreview.endDate) : "-"}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={markManualPaid.isPending}>Batal</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={markManualPaid.isPending || !manualPaymentPreview}
-              onClick={handleConfirmManualPaid}
-            >
-              {markManualPaid.isPending ? "Memproses..." : "Ya, Tandai Lunas"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        submitUrl={manualPaymentTenant ? `/api/payments/renewals/${manualPaymentTenant.id}/manual-paid` : ""}
+        tenantName={manualPaymentTenant?.tenantName || "-"}
+        bookingCode={manualPaymentTenant?.bookingCode || "-"}
+        propertyId={manualPaymentTenant?.propertyId}
+        propertyName={manualPaymentTenant?.propertyName}
+        roomLabel={
+          manualPaymentTenant ? `${manualPaymentTenant.roomTypeName} / Unit ${manualPaymentTenant.roomNumber}` : "-"
+        }
+        periodLabel={
+          manualPaymentPreview
+            ? `${dateLabel(manualPaymentPreview.startDate)} - ${dateLabel(manualPaymentPreview.endDate)}`
+            : "Periode berikutnya belum bisa ditentukan"
+        }
+        amount={manualPaymentTenant?.currentRentAmount || 0}
+        onSuccess={() => {
+          setManualPaymentTenant(null);
+          queryClient.invalidateQueries({ queryKey: ["tenants"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+          queryClient.invalidateQueries({ queryKey: ["manual-payment-proofs"] });
+        }}
+      />
 
       <Dialog
         open={isAddTenantOpen}

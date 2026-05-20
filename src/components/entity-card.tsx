@@ -50,3 +50,4 @@ export function EntityCard({ id, name, label, imageUrl, href, fallbackIcon }: En
         </div>
     );
 }
+

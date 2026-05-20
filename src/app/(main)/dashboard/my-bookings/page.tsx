@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TenantManualPaymentDialog } from "@/components/tenant-manual-payment-dialog";
+import { TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 
@@ -15,26 +19,62 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
+const addPricingPeriod = (start: string | Date, pricingType?: string | null) => {
+  const nextDate = new Date(start);
+
+  if (pricingType === "WEEKLY") nextDate.setDate(nextDate.getDate() + 7);
+  if (pricingType === "MONTHLY") nextDate.setMonth(nextDate.getMonth() + 1);
+  if (pricingType === "THREE_MONTHLY") nextDate.setMonth(nextDate.getMonth() + 3);
+  if (pricingType === "YEARLY") nextDate.setFullYear(nextDate.getFullYear() + 1);
+
+  return nextDate;
+};
+
 type BookingPayment = {
+  id?: string;
   status?: string;
   category?: string;
   paymentUrl?: string | null;
   expiredAt?: string | Date | null;
   amountMatchesCurrentPricing?: boolean;
+  latestManualProof?: {
+    id: string;
+    status: "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+    transferAmount: number;
+    senderName?: string | null;
+    senderBank?: string | null;
+    adminNote?: string | null;
+    createdAt: string;
+    verifiedAt?: string | null;
+  } | null;
 };
 
 type BookingCard = {
   id: string;
   bookingCode: string;
   amount: number;
+  pricingType?: string;
   currentRentAmount?: number | null;
   status: string;
   isSubscription?: boolean;
   startDate?: string | Date | null;
   endDate?: string | Date | null;
+  currentPeriodStart?: string | Date | null;
   currentPeriodEnd?: string | Date | null;
   nextDueDate?: string | Date | null;
-  property?: { name?: string | null } | null;
+  currentInitialPaymentAmount?: number | null;
+  currentRenewalAmount?: number | null;
+  property?: {
+    id?: string | null;
+    name?: string | null;
+    manualPaymentAccounts?: Array<{
+      id: string;
+      label: string;
+      bankName: string;
+      accountNumber: string;
+      accountHolder: string;
+    }>;
+  } | null;
   roomType?: { name?: string | null } | null;
   room?: { roomNumber?: string | null } | null;
   latestPayment?: BookingPayment | null;
@@ -76,6 +116,9 @@ const isPaymentLinkActive = (payment?: BookingPayment | null) => {
 export default function MyBookingsPage() {
   const { data: session, isPending } = useSession();
   const queryClient = useQueryClient();
+  const [selectedManualBooking, setSelectedManualBooking] = useState<BookingCard | null>(null);
+  const [selectedRenewalBooking, setSelectedRenewalBooking] = useState<BookingCard | null>(null);
+  const [renewalMethodDefault, setRenewalMethodDefault] = useState<TenantPaymentMethod>("MIDTRANS");
 
   const bookingsQuery = useQuery({
     queryKey: ["my-bookings"],
@@ -132,6 +175,11 @@ export default function MyBookingsPage() {
 
   const bookings = (bookingsQuery.data?.data || []) as BookingCard[];
 
+  const handleRenewalPaymentChoice = (booking: BookingCard, preferredMethod: TenantPaymentMethod = "MIDTRANS") => {
+    setRenewalMethodDefault(preferredMethod);
+    setSelectedRenewalBooking(booking);
+  };
+
   return (
     <div className="space-y-6 p-8 pt-6">
       <div>
@@ -143,6 +191,7 @@ export default function MyBookingsPage() {
         {bookings.map((booking) => {
           const rentAmount = booking.currentRentAmount ?? booking.amount;
           const hasActivePaymentLink = isPaymentLinkActive(booking.latestPayment);
+          const latestManualProof = booking.latestPayment?.latestManualProof;
           const latestPaymentNeedsRefresh = booking.latestPayment?.amountMatchesCurrentPricing === false;
           const latestPaymentExpired = Boolean(
             booking.latestPayment?.status === "PENDING" &&
@@ -159,6 +208,16 @@ export default function MyBookingsPage() {
             (booking.status === "EXPIRED" &&
               (!booking.latestPayment || booking.latestPayment?.category === "BOOKING") &&
               booking.latestPayment?.status !== "PAID");
+          const canUploadManualProof =
+            (canRetryInitialPayment || (booking.status === "ACTIVE" && booking.isSubscription)) &&
+            latestManualProof?.status !== "PENDING" &&
+            latestManualProof?.status !== "APPROVED";
+          const visibleManualAccounts = booking.property?.manualPaymentAccounts || [];
+          const hasVisibleManualAccounts = visibleManualAccounts.length > 0;
+          const manualProofButtonLabel =
+            latestManualProof?.status === "REJECTED" || latestManualProof?.status === "REVISION_REQUIRED"
+              ? "Upload Ulang Bukti"
+              : "Upload Bukti Pembayaran";
 
           return (
             <Card key={booking.id}>
@@ -201,6 +260,35 @@ export default function MyBookingsPage() {
                   </div>
                 </div>
 
+                {latestManualProof ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium">Status Bukti Pembayaran Manual</div>
+                      <Badge
+                        variant={
+                          latestManualProof.status === "APPROVED"
+                            ? "default"
+                            : latestManualProof.status === "REJECTED"
+                              ? "destructive"
+                              : latestManualProof.status === "REVISION_REQUIRED"
+                                ? "warning"
+                                : "outline"
+                        }
+                      >
+                        {latestManualProof.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 text-muted-foreground">
+                      Upload terakhir {dateLabel(latestManualProof.createdAt)} untuk nominal {currency(latestManualProof.transferAmount)}.
+                    </div>
+                    {latestManualProof.adminNote ? (
+                      <div className="mt-2 text-sm">
+                        <span className="text-muted-foreground">Catatan admin:</span> {latestManualProof.adminNote}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-2">
                   {canRetryInitialPayment && (
                     <>
@@ -217,11 +305,24 @@ export default function MyBookingsPage() {
                     </>
                   )}
                   {booking.status === "ACTIVE" && booking.isSubscription && (
+                    <Button variant="outline" onClick={() => handleRenewalPaymentChoice(booking)}>
+                      Pilih Pembayaran Perpanjangan
+                    </Button>
+                  )}
+                  {canUploadManualProof && (
                     <Button
-                      variant="outline"
-                      onClick={() => payBooking.mutate({ bookingId: booking.id, renewal: true })}
+                      variant="secondary"
+                      onClick={() => {
+                        if (booking.status === "ACTIVE" && booking.isSubscription) {
+                          handleRenewalPaymentChoice(booking, "MANUAL");
+                          return;
+                        }
+
+                        setSelectedManualBooking(booking);
+                      }}
+                      disabled={!hasVisibleManualAccounts}
                     >
-                      Bayar Perpanjangan
+                      {manualProofButtonLabel}
                     </Button>
                   )}
                   {hasActivePaymentLink && (
@@ -237,11 +338,98 @@ export default function MyBookingsPage() {
                     </Button>
                   )}
                 </div>
+                {canUploadManualProof && !hasVisibleManualAccounts ? (
+                  <div className="text-sm text-amber-700">
+                    Pembayaran manual belum tersedia karena admin belum menambahkan rekening tujuan untuk properti ini.
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      <TenantManualPaymentDialog
+        open={!!selectedManualBooking}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedManualBooking(null);
+          }
+        }}
+        submitUrl={
+          selectedManualBooking
+            ? selectedManualBooking.status === "ACTIVE" && selectedManualBooking.isSubscription
+              ? `/api/payments/renewals/${selectedManualBooking.id}/manual-proof`
+              : `/api/payments/bookings/${selectedManualBooking.id}/manual-proof`
+            : ""
+        }
+        propertyName={selectedManualBooking?.property?.name}
+        roomLabel={
+          selectedManualBooking
+            ? `${selectedManualBooking.roomType?.name || "-"} / ${selectedManualBooking.room?.roomNumber || "-"}`
+            : null
+        }
+        bookingCode={selectedManualBooking?.bookingCode || "-"}
+        periodLabel={
+          selectedManualBooking
+            ? selectedManualBooking.status === "ACTIVE" && selectedManualBooking.isSubscription
+              ? (() => {
+                  const renewalStart = selectedManualBooking.currentPeriodEnd || selectedManualBooking.endDate;
+                  if (!renewalStart) {
+                    return null;
+                  }
+
+                  const renewalEnd = addPricingPeriod(renewalStart, selectedManualBooking.pricingType);
+                  return `${dateLabel(renewalStart)} - ${dateLabel(renewalEnd)}`;
+                })()
+              : `${dateLabel(selectedManualBooking.currentPeriodStart || selectedManualBooking.startDate)} - ${dateLabel(
+                  selectedManualBooking.currentPeriodEnd || selectedManualBooking.endDate,
+                )}`
+            : null
+        }
+        amount={selectedManualBooking?.currentRenewalAmount || selectedManualBooking?.currentInitialPaymentAmount || 0}
+        manualPaymentAccounts={selectedManualBooking?.property?.manualPaymentAccounts || []}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
+          setSelectedManualBooking(null);
+        }}
+      />
+
+      <TenantPaymentMethodDialog
+        open={!!selectedRenewalBooking}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedRenewalBooking(null);
+          }
+        }}
+        title="Pilih Pembayaran Perpanjangan"
+        description="Tentukan apakah Anda ingin membuat pembayaran perpanjangan lewat Midtrans atau transfer manual."
+        amount={selectedRenewalBooking?.currentRenewalAmount || selectedRenewalBooking?.currentInitialPaymentAmount || 0}
+        propertyName={selectedRenewalBooking?.property?.name}
+        roomLabel={
+          selectedRenewalBooking
+            ? `${selectedRenewalBooking.roomType?.name || "-"} / ${selectedRenewalBooking.room?.roomNumber || "-"}`
+            : null
+        }
+        bookingCode={selectedRenewalBooking?.bookingCode || "-"}
+        manualPaymentAccounts={selectedRenewalBooking?.property?.manualPaymentAccounts || []}
+        defaultMethod={renewalMethodDefault}
+        isSubmitting={payBooking.isPending}
+        onContinue={(method) => {
+          if (!selectedRenewalBooking) {
+            return;
+          }
+
+          if (method === "MIDTRANS") {
+            payBooking.mutate({ bookingId: selectedRenewalBooking.id, renewal: true });
+            setSelectedRenewalBooking(null);
+            return;
+          }
+
+          setSelectedManualBooking(selectedRenewalBooking);
+          setSelectedRenewalBooking(null);
+        }}
+      />
     </div>
   );
 }

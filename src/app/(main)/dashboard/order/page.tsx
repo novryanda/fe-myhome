@@ -6,17 +6,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { ClipboardList, CreditCard, Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { AdminManualPaymentDialog } from "@/components/admin-manual-payment-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,6 +59,7 @@ type PaymentRow = {
   id: string;
   bookingCode: string;
   tenantName: string;
+  propertyId?: string | null;
   propertyName?: string | null;
   roomTypeName?: string | null;
   roomNumber?: string | null;
@@ -77,14 +71,14 @@ type PaymentRow = {
   expiredAt?: string | Date | null;
   createdAt?: string | Date | null;
   midtransOrderId?: string | null;
+  latestManualProof?: {
+    id: string;
+    status: "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+    transferAmount: number;
+    adminNote?: string | null;
+    createdAt: string;
+  } | null;
 };
-
-const MANUAL_PAYMENT_METHODS = [
-  { value: "CASH", label: "Cash" },
-  { value: "TRANSFER", label: "Transfer" },
-  { value: "QRIS", label: "QRIS" },
-  { value: "EDC", label: "EDC" },
-] as const;
 
 async function fetchAllPages<T>(path: string, search?: string) {
   const firstResponse = await api.get(path, {
@@ -128,8 +122,6 @@ export default function OrderPage() {
   const [isExportingBookings, setIsExportingBookings] = useState(false);
   const [isExportingPayments, setIsExportingPayments] = useState(false);
   const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentRow | null>(null);
-  const [manualPaymentMethod, setManualPaymentMethod] =
-    useState<(typeof MANUAL_PAYMENT_METHODS)[number]["value"]>("CASH");
 
   const canManageCheckIn = session?.user?.role === "ADMIN";
   const canMarkManualPayment = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERADMIN";
@@ -206,29 +198,6 @@ export default function OrderPage() {
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Aksi gagal diproses");
-    },
-  });
-
-  const markManualPaid = useMutation({
-    mutationFn: async ({ paymentId, paymentType }: { paymentId: string; paymentType: string }) => {
-      const response = await api.post(`/api/payments/${paymentId}/manual-paid`, {
-        paymentType,
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      toast.success("Pembayaran berhasil ditandai lunas.");
-      setSelectedManualPayment(null);
-      setManualPaymentMethod("CASH");
-      queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
-    },
-    onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Gagal menandai pembayaran.");
     },
   });
 
@@ -340,18 +309,6 @@ export default function OrderPage() {
 
   const handleOpenManualPaymentDialog = (payment: PaymentRow) => {
     setSelectedManualPayment(payment);
-    setManualPaymentMethod("CASH");
-  };
-
-  const handleConfirmManualPayment = () => {
-    if (!selectedManualPayment) {
-      return;
-    }
-
-    markManualPaid.mutate({
-      paymentId: selectedManualPayment.id,
-      paymentType: manualPaymentMethod,
-    });
   };
 
   return (
@@ -547,6 +504,11 @@ export default function OrderPage() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge>
+                            {payment.latestManualProof ? (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Proof: {payment.latestManualProof.status}
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell>{payment.paymentType || "-"}</TableCell>
                           <TableCell>{currency(payment.amount)}</TableCell>
@@ -560,10 +522,9 @@ export default function OrderPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={markManualPaid.isPending}
                                   onClick={() => handleOpenManualPaymentDialog(payment)}
                                 >
-                                  Tandai Lunas
+                                  Tandai Bayar Manual
                                 </Button>
                               ) : (
                                 <span className="text-muted-foreground text-sm">-</span>
@@ -601,82 +562,32 @@ export default function OrderPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog
+      <AdminManualPaymentDialog
         open={!!selectedManualPayment}
         onOpenChange={(open) => {
-          if (!open && !markManualPaid.isPending) {
+          if (!open) {
             setSelectedManualPayment(null);
           }
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Konfirmasi Pembayaran Manual</DialogTitle>
-            <DialogDescription>
-              Tandai pembayaran ini sebagai lunas karena tenant sudah membayar langsung ke admin.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="grid gap-3 rounded-lg border p-4 text-sm">
-              <div>
-                <div className="text-muted-foreground">Order</div>
-                <div className="font-medium">{selectedManualPayment?.bookingCode || "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Tenant</div>
-                <div className="font-medium">{selectedManualPayment?.tenantName || "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Kategori</div>
-                <div className="font-medium">{selectedManualPayment?.category || "-"}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Nominal</div>
-                <div className="font-medium">{currency(selectedManualPayment?.amount || 0)}</div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-medium text-sm">Metode pembayaran manual</div>
-              <Select
-                value={manualPaymentMethod}
-                onValueChange={(value) =>
-                  setManualPaymentMethod(value as (typeof MANUAL_PAYMENT_METHODS)[number]["value"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih metode pembayaran" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MANUAL_PAYMENT_METHODS.map((method) => (
-                    <SelectItem key={method.value} value={method.value}>
-                      {method.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="text-muted-foreground text-sm">
-              Pembayaran manual tidak menambah saldo withdrawable sistem, karena uang diterima langsung oleh admin.
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSelectedManualPayment(null)}
-              disabled={markManualPaid.isPending}
-            >
-              Batal
-            </Button>
-            <Button onClick={handleConfirmManualPayment} disabled={markManualPaid.isPending}>
-              {markManualPaid.isPending ? "Memproses..." : "Konfirmasi Lunas"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        submitUrl={selectedManualPayment ? `/api/payments/${selectedManualPayment.id}/manual-paid` : ""}
+        tenantName={selectedManualPayment?.tenantName || "-"}
+        bookingCode={selectedManualPayment?.bookingCode || "-"}
+        propertyId={selectedManualPayment?.propertyId}
+        propertyName={selectedManualPayment?.propertyName}
+        roomLabel={selectedManualPayment?.roomNumber || "-"}
+        periodLabel={selectedManualPayment?.category || "-"}
+        amount={selectedManualPayment?.amount || 0}
+        onSuccess={() => {
+          setSelectedManualPayment(null);
+          queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["tenants"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+          queryClient.invalidateQueries({ queryKey: ["manual-payment-proofs"] });
+        }}
+      />
     </div>
   );
 }

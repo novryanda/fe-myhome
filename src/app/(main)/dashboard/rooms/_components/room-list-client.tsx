@@ -1,310 +1,606 @@
 "use client";
 
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
-    Pagination,
-    PaginationContent,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-} from "@/components/ui/pagination";
-import { PlusCircle, Search, Building, RefreshCcw, LayoutGrid, Bed, Clock } from "lucide-react";
+  ArrowDownAZ,
+  ArrowUpAZ,
+  Bed,
+  Building,
+  Eye,
+  LayoutGrid,
+  PlusCircle,
+  RefreshCcw,
+  Search,
+  SlidersHorizontal,
+  UserRound,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useSession } from "@/lib/auth-client";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EntityCard } from "@/components/entity-card";
+import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { PageHero } from "../../_components/page-hero";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSession } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 
+type RoomStatus = "AVAILABLE" | "RESERVED" | "BOOKED" | "OCCUPIED" | "MAINTENANCE";
+
+type RoomDetail = {
+  id: string;
+  roomNumber: string;
+  status: RoomStatus;
+  roomTypeId: string;
+  roomTypeName: string;
+  propertyId: string;
+  propertyName: string;
+  currentBooking?: {
+    id: string;
+    bookingCode: string;
+    tenantName: string;
+    tenantEmail: string;
+    tenantPhone?: string | null;
+    checkInAt?: string | Date | null;
+    nextDueDate?: string | Date | null;
+  } | null;
+};
+
+const statusLabelMap: Record<RoomStatus, string> = {
+  AVAILABLE: "Tersedia",
+  RESERVED: "Dipesan",
+  BOOKED: "Booking Aktif",
+  OCCUPIED: "Terisi",
+  MAINTENANCE: "Perbaikan",
+};
+
+const statusVariantMap: Record<RoomStatus, "success" | "warning" | "destructive" | "secondary"> = {
+  AVAILABLE: "success",
+  RESERVED: "warning",
+  BOOKED: "warning",
+  OCCUPIED: "destructive",
+  MAINTENANCE: "secondary",
+};
+
+const dateLabel = (value?: string | Date | null) =>
+  value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
+
+const renderPagination = (
+  currentPage: number,
+  totalPages: number,
+  onPageChange: (page: number) => void,
+) => {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <Pagination className="mx-0 w-auto">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            href="#"
+            onClick={(event) => {
+              event.preventDefault();
+              if (currentPage > 1) {
+                onPageChange(currentPage - 1);
+              }
+            }}
+            className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+          />
+        </PaginationItem>
+
+        {[...Array(totalPages)].map((_, index) => {
+          const page = index + 1;
+          if (
+            page === 1 ||
+            page === totalPages ||
+            (page >= currentPage - 1 && page <= currentPage + 1)
+          ) {
+            return (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  href="#"
+                  isActive={currentPage === page}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onPageChange(page);
+                  }}
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            );
+          }
+
+          if (
+            (page === 2 && currentPage > 3) ||
+            (page === totalPages - 1 && currentPage < totalPages - 2)
+          ) {
+            return (
+              <PaginationItem key={page}>
+                <span className="px-2">...</span>
+              </PaginationItem>
+            );
+          }
+
+          return null;
+        })}
+
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            onClick={(event) => {
+              event.preventDefault();
+              if (currentPage < totalPages) {
+                onPageChange(currentPage + 1);
+              }
+            }}
+            className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+};
+
 export default function RoomListClient() {
-    const router = useRouter();
-    const { data: session } = useSession();
-    const [activePropertyId, setActivePropertyId] = useState<string>("");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [debouncedSearch, setDebouncedSearch] = useState("");
-    const limit = 15;
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [activePropertyId, setActivePropertyId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"room-types" | "all-rooms">("room-types");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [roomTypePage, setRoomTypePage] = useState(1);
+  const [roomPage, setRoomPage] = useState(1);
+  const [roomStatusFilter, setRoomStatusFilter] = useState<RoomStatus | "ALL">("ALL");
+  const [roomSortOrder, setRoomSortOrder] = useState<"asc" | "desc">("asc");
+  const [selectedRoom, setSelectedRoom] = useState<RoomDetail | null>(null);
+  const limit = 15;
 
-    // Debounce search query
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(searchQuery);
-            setCurrentPage(1); // Reset to page 1 on search
-        }, 400);
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      if (activeTab === "room-types") {
+        setRoomTypePage(1);
+      } else {
+        setRoomPage(1);
+      }
+    }, 400);
 
-    const isAdmin = session?.user?.role === "ADMIN";
-    const isSuperAdmin = session?.user?.role === "SUPERADMIN";
+    return () => clearTimeout(timer);
+  }, [activeTab, searchQuery]);
 
-    // Fetch properties for selection
-    const { data: propertiesData, isLoading: isLoadingProperties } = useQuery({
-        queryKey: ["all-properties"],
-        queryFn: async () => {
-            const res = await api.get("/api/properties");
-            return res.data;
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isSuperAdmin = session?.user?.role === "SUPERADMIN";
+
+  const { data: propertiesData, isLoading: isLoadingProperties } = useQuery({
+    queryKey: ["all-properties"],
+    queryFn: async () => {
+      const response = await api.get("/api/properties");
+      return response.data;
+    },
+  });
+
+  const properties = propertiesData?.data || [];
+
+  useEffect(() => {
+    if (!activePropertyId && properties.length > 0) {
+      setActivePropertyId(isSuperAdmin ? "all" : properties[0].id);
+    }
+  }, [activePropertyId, isSuperAdmin, properties]);
+
+  const activeProperty = properties.find((property: any) => property.id === activePropertyId);
+
+  const roomTypesQuery = useQuery({
+    queryKey: ["all-room-types", activePropertyId, roomTypePage, debouncedSearch],
+    queryFn: async () => {
+      if (!activePropertyId) return null;
+      const response = await api.get(`/api/room-types/property/${activePropertyId}`, {
+        params: {
+          page: roomTypePage,
+          limit,
+          search: debouncedSearch || undefined,
         },
-    });
+      });
+      return response.data;
+    },
+    enabled: !!activePropertyId,
+    placeholderData: keepPreviousData,
+  });
 
-    const properties = propertiesData?.data || [];
-
-    // Set first property as active by default if not set
-    useEffect(() => {
-        if (!activePropertyId && properties.length > 0) {
-            setActivePropertyId(properties[0].id);
-        }
-    }, [activePropertyId, properties]);
-
-    // Fetch room types for active property
-    const { data: roomTypesData, isLoading: isLoadingRoomTypes, refetch, isRefetching } = useQuery({
-        queryKey: ["all-room-types", activePropertyId, currentPage, debouncedSearch],
-        queryFn: async () => {
-            if (!activePropertyId) return null;
-            const res = await api.get(`/api/room-types/property/${activePropertyId}`, {
-                params: {
-                    page: currentPage,
-                    limit: limit,
-                    search: debouncedSearch
-                },
-            });
-            return res.data;
+  const allRoomsQuery = useQuery({
+    queryKey: [
+      "all-rooms-table",
+      activePropertyId,
+      roomPage,
+      debouncedSearch,
+      roomStatusFilter,
+      roomSortOrder,
+    ],
+    queryFn: async () => {
+      if (!activePropertyId) return null;
+      const response = await api.get(`/api/room-types/property/${activePropertyId}/rooms`, {
+        params: {
+          page: roomPage,
+          limit,
+          search: debouncedSearch || undefined,
+          status: roomStatusFilter === "ALL" ? undefined : roomStatusFilter,
+          sortOrder: roomSortOrder,
         },
-        enabled: !!activePropertyId,
-        placeholderData: keepPreviousData,
-    });
+      });
+      return response.data;
+    },
+    enabled: !!activePropertyId,
+    placeholderData: keepPreviousData,
+  });
 
-    const roomTypes = roomTypesData?.data || [];
-    const meta = roomTypesData?.meta || { totalItems: 0, totalPages: 0, currentPage: 1 };
+  const roomTypes = roomTypesQuery.data?.data || [];
+  const roomTypesMeta = roomTypesQuery.data?.meta || { totalItems: 0, totalPages: 0, currentPage: 1 };
+  const allRooms = (allRoomsQuery.data?.data || []) as RoomDetail[];
+  const allRoomsMeta = allRoomsQuery.data?.meta || { totalItems: 0, totalPages: 0, currentPage: 1 };
 
-
-    const formatRupiah = (number: number) => {
-        return new Intl.NumberFormat("id-ID", {
-            style: "currency",
-            currency: "IDR",
-            minimumFractionDigits: 0,
-        }).format(number);
-    };
-
-    return (
-        <>
-            <PageHero
-                title="Kamar & Harga"
-                description="Kelola tipe kamar, ketersediaan, dan harga sewa properti Anda."
-                action={
-                    <div className="flex items-center space-x-2">
-                        <Button onClick={() => refetch()} variant="outline" size="icon" title="Refresh data">
-                            <RefreshCcw className="h-4 w-4" />
-                        </Button>
-                        {isAdmin && (
-                            <Button
-                                disabled={!activePropertyId || properties.find((p: any) => p.id === activePropertyId)?.status !== "APPROVED"}
-                                onClick={() => router.push("/dashboard/rooms/add")}
-                                title={properties.find((p: any) => p.id === activePropertyId)?.status !== "APPROVED" ? "Properti harus disetujui terlebih dahulu" : "Tambah Ruangan"}
-                            >
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Tambah Kamar
-                            </Button>
-                        )}
-                    </div>
+  return (
+    <>
+      <PageHero
+        title="Kamar & Harga"
+        description="Kelola tipe kamar, daftar unit kamar, ketersediaan, dan harga sewa properti Anda."
+        action={
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={() => {
+                if (activeTab === "room-types") {
+                  roomTypesQuery.refetch();
+                } else {
+                  allRoomsQuery.refetch();
                 }
+              }}
+              variant="outline"
+              size="icon"
+              title="Refresh data"
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+            {isAdmin && (
+              <Button
+                disabled={!activePropertyId || (activePropertyId !== "all" && activeProperty?.status !== "APPROVED")}
+                onClick={() => router.push("/dashboard/rooms/add")}
+                title={activePropertyId !== "all" && activeProperty?.status !== "APPROVED" ? "Properti harus disetujui terlebih dahulu" : "Tambah Ruangan"}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Tambah Kamar
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      <div className="mb-6 mt-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="w-full xl:w-72">
+          <Select
+            value={activePropertyId}
+            onValueChange={(value) => {
+              setActivePropertyId(value);
+              setRoomTypePage(1);
+              setRoomPage(1);
+            }}
+            disabled={isLoadingProperties}
+          >
+            <SelectTrigger className="h-10 rounded-xl bg-card/50 backdrop-blur-sm border-border/50 transition-all hover:border-primary/30">
+              <SelectValue placeholder={isLoadingProperties ? "Memuat properti..." : "Pilih properti..."} />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl shadow-2xl border-border/50">
+              {isSuperAdmin && (
+                <SelectItem value="all" className="rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid className="h-4 w-4 text-primary" />
+                    <span>Semua Properti</span>
+                  </div>
+                </SelectItem>
+              )}
+              {properties.map((property: any) => (
+                <SelectItem key={property.id} value={property.id} className="rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                    <span>{property.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex w-full flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
+          <div className="relative w-full xl:w-80">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+            <Input
+              type="search"
+              placeholder={activeTab === "room-types" ? "Cari tipe kamar..." : "Cari nomor kamar, tipe, atau penghuni..."}
+              className="h-10 rounded-xl border-border/50 bg-card/50 pl-10 backdrop-blur-sm transition-all hover:border-primary/30"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
+          </div>
 
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 mt-6">
-                <div className="w-full md:w-72">
-                    <Select
-                        value={activePropertyId}
-                        onValueChange={(val) => {
-                            setActivePropertyId(val);
-                            setCurrentPage(1); // Reset to page 1 on filter change
-                        }}
-                        disabled={isLoadingProperties}
-                    >
-                        <SelectTrigger className="h-10 rounded-xl bg-card/50 backdrop-blur-sm border-border/50 transition-all hover:border-primary/30">
-                            <SelectValue placeholder={isLoadingProperties ? "Memuat properti..." : "Pilih properti..."} />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl shadow-2xl border-border/50">
-                            {isSuperAdmin && (
-                                <SelectItem value="all" className="rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                        <LayoutGrid className="w-4 h-4 text-primary" />
-                                        <span>Semua Properti</span>
-                                    </div>
-                                </SelectItem>
-                            )}
-                            {properties.map((p: any) => (
-                                <SelectItem key={p.id} value={p.id} className="rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                        <Building className="w-4 h-4 text-muted-foreground" />
-                                        <span>{p.name}</span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                            {properties.length === 0 && !isLoadingProperties && (
-                                <SelectItem value="all" disabled>Tidak ada properti</SelectItem>
-                            )}
-                        </SelectContent>
-                    </Select>
-                </div>
+          {activeTab === "all-rooms" ? (
+            <Select
+              value={roomStatusFilter}
+              onValueChange={(value) => {
+                setRoomStatusFilter(value as RoomStatus | "ALL");
+                setRoomPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10 w-full rounded-xl xl:w-52">
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Semua Status</SelectItem>
+                <SelectItem value="AVAILABLE">Tersedia</SelectItem>
+                <SelectItem value="OCCUPIED">Terisi</SelectItem>
+                <SelectItem value="MAINTENANCE">Perbaikan</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+      </div>
 
-                <div className="relative w-full md:w-80 group">
-                    {isRefetching ? (
-                        <RefreshCcw className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
-                    ) : (
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 transition-colors group-focus-within:text-primary" />
-                    )}
-                    <Input
-                        type="search"
-                        placeholder="Cari tipe kamar..."
-                        className="pl-10 h-10 rounded-xl bg-card/50 backdrop-blur-sm border-border/50 transition-all focus:ring-primary/20 hover:border-primary/30"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "room-types" | "all-rooms")} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="all-rooms">Semua Kamar</TabsTrigger>
+          <TabsTrigger value="room-types">Jenis Kamar</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="room-types" className="space-y-6">
+          {roomTypesQuery.isLoading ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <div key={item} className="flex h-[200px] gap-4 rounded-3xl border bg-card p-4 shadow-sm">
+                  <Skeleton className="h-full w-[180px] shrink-0 rounded-2xl" />
+                  <div className="flex-1 space-y-3 py-2">
+                    <Skeleton className="h-4 w-[100px]" />
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <div className="flex gap-2 pt-4">
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                  </div>
                 </div>
+              ))}
             </div>
+          ) : !activePropertyId ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+              <Building className="mb-4 h-12 w-12 text-muted-foreground opacity-50" />
+              <h3 className="mb-1 text-xl font-medium">Pilih Properti</h3>
+              <p className="mb-4 max-w-sm text-muted-foreground">
+                Silakan pilih properti terlebih dahulu untuk melihat daftar tipe kamar.
+              </p>
+            </div>
+          ) : roomTypes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed bg-muted/30 py-20">
+              <LayoutGrid className="mb-4 h-16 w-16 text-muted-foreground/30" />
+              <h3 className="text-xl font-semibold text-muted-foreground">Tidak Ada Tipe Kamar</h3>
+              <p className="mt-2 max-w-xs text-center text-muted-foreground/70">
+                {searchQuery
+                  ? "Tidak ada tipe kamar yang cocok dengan pencarian Anda."
+                  : activePropertyId === "all"
+                    ? "Belum ada tipe kamar yang terdaftar di sistem."
+                    : "Belum ada tipe kamar untuk properti ini."}
+              </p>
+            </div>
+          ) : (
+            <div className={`space-y-3 transition-opacity duration-300 ${roomTypesQuery.isRefetching ? "opacity-50" : "opacity-100"}`}>
+              {roomTypes.map((roomType: any) => {
+                const thumbnail =
+                  roomType.images?.find((image: any) => image.category === "BEDROOM")?.url ||
+                  roomType.images?.[0]?.url;
 
-            {activePropertyId && properties.find((p: any) => p.id === activePropertyId)?.status !== "APPROVED" }
+                return (
+                  <EntityCard
+                    key={roomType.id}
+                    id={roomType.id}
+                    name={roomType.name}
+                    label="Nama Kamar"
+                    imageUrl={thumbnail}
+                    href={`/dashboard/rooms/${roomType.id}`}
+                    fallbackIcon={<Bed className="size-6" />}
+                  />
+                );
+              })}
+            </div>
+          )}
 
-            {/* Empty States & Loaders */}
-            {isLoadingRoomTypes ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <div key={i} className="rounded-3xl border bg-card p-4 space-y-4 shadow-sm h-[200px] flex gap-4">
-                            <Skeleton className="w-[180px] h-full rounded-2xl shrink-0" />
-                            <div className="flex-1 space-y-3 py-2">
-                                <Skeleton className="h-4 w-[100px]" />
-                                <Skeleton className="h-6 w-full" />
-                                <Skeleton className="h-4 w-2/3" />
-                                <div className="pt-4 flex gap-2">
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+          {!roomTypesQuery.isLoading && roomTypesMeta.totalPages > 1 ? (
+            <div className="flex items-center justify-between border-t border-muted pb-10 pt-6">
+              <p className="text-sm text-muted-foreground">
+                Menampilkan <span className="font-medium">{(roomTypePage - 1) * limit + 1}</span> sampai{" "}
+                <span className="font-medium">{Math.min(roomTypePage * limit, roomTypesMeta.totalItems)}</span> dari{" "}
+                <span className="font-medium">{roomTypesMeta.totalItems}</span> hasil
+              </p>
+              {renderPagination(roomTypePage, roomTypesMeta.totalPages, setRoomTypePage)}
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="all-rooms" className="space-y-6">
+          {allRoomsQuery.isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((item) => (
+                <Skeleton key={item} className="h-16 rounded-xl" />
+              ))}
+            </div>
+          ) : !activePropertyId ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+              <Building className="mb-4 h-12 w-12 text-muted-foreground opacity-50" />
+              <h3 className="mb-1 text-xl font-medium">Pilih Properti</h3>
+              <p className="mb-4 max-w-sm text-muted-foreground">
+                Silakan pilih properti terlebih dahulu untuk melihat daftar seluruh kamar.
+              </p>
+            </div>
+          ) : allRooms.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <SlidersHorizontal className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                <div className="text-lg font-semibold">Tidak ada kamar ditemukan</div>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                  Coba ubah filter status, urutan nomor kamar, atau kata kunci pencarian Anda.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Daftar Keseluruhan Kamar</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="-ml-3 h-auto px-3 py-1 text-left font-semibold"
+                            onClick={() => {
+                              setRoomSortOrder((previous) => (previous === "asc" ? "desc" : "asc"));
+                              setRoomPage(1);
+                            }}
+                          >
+                            Nomor Kamar
+                            {roomSortOrder === "asc" ? (
+                              <ArrowDownAZ className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpAZ className="ml-2 h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Tipe Kamar</TableHead>
+                        <TableHead>Properti</TableHead>
+                        <TableHead>Penghuni</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allRooms.map((room) => (
+                        <TableRow key={room.id}>
+                          <TableCell className="font-medium">{room.roomNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariantMap[room.status]}>{statusLabelMap[room.status]}</Badge>
+                          </TableCell>
+                          <TableCell>{room.roomTypeName}</TableCell>
+                          <TableCell>{room.propertyName}</TableCell>
+                          <TableCell>
+                            {room.currentBooking ? (
+                              <div className="space-y-1">
+                                <div className="font-medium">{room.currentBooking.tenantName}</div>
+                                <div className="text-xs text-muted-foreground">{room.currentBooking.tenantEmail}</div>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Belum ada penghuni</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => setSelectedRoom(room)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Detail
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-            ) : !activePropertyId ? (
-                <div className="flex flex-col items-center justify-center p-12 text-center border rounded-lg border-dashed">
-                    <Building className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                    <h3 className="text-xl font-medium mb-1">Pilih Properti</h3>
-                    <p className="text-muted-foreground mb-4 max-w-sm">Silakan pilih properti terlebih dahulu untuk melihat daftar tipe kamar.</p>
-                </div>
-            ) : roomTypes.length === 0 ? (
-                <div className="py-20 flex flex-col items-center justify-center border-2 border-dashed rounded-3xl bg-muted/30">
-                    <LayoutGrid className="w-16 h-16 text-muted-foreground/30 mb-4" />
-                    <h3 className="text-xl font-semibold text-muted-foreground">Tidak Ada Kamar</h3>
-                    <p className="text-muted-foreground/70 max-w-xs text-center mt-2">
-                        {searchQuery ? "Tidak ada kamar yang cocok dengan pencarian Anda." : (activePropertyId === "all" ? "Belum ada tipe kamar yang terdaftar di sistem." : "Belum ada tipe kamar untuk properti ini.")}
-                    </p>
-                    {!searchQuery && isAdmin && (
-                        <Button
-                            className="mt-6 rounded-xl shadow-lg shadow-primary/20"
-                            onClick={() => router.push("/dashboard/rooms/add")}
-                        >
-                            <PlusCircle className="mr-2 h-4 w-4" /> Tambah Kamar Sekarang
-                        </Button>
-                    )}
-                </div>
-            ) : (
-                <div className={`space-y-3 transition-opacity duration-300 ${isRefetching ? 'opacity-50' : 'opacity-100'}`}>
-                    {roomTypes.map((room: any) => {
-                        const thumbnail = room.images?.find((img: any) => img.category === "BEDROOM")?.url
-                            || room.images?.[0]?.url;
 
-                        return (
-                            <EntityCard
-                                key={room.id}
-                                id={room.id}
-                                name={room.name}
-                                label="Nama Kamar"
-                                imageUrl={thumbnail}
-                                href={`/dashboard/rooms/${room.id}`}
-                                fallbackIcon={<Bed className="size-6" />}
-                            />
-                        );
-                    })}
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Menampilkan <span className="font-medium">{(roomPage - 1) * limit + 1}</span> sampai{" "}
+                    <span className="font-medium">{Math.min(roomPage * limit, allRoomsMeta.totalItems)}</span> dari{" "}
+                    <span className="font-medium">{allRoomsMeta.totalItems}</span> kamar
+                  </p>
+                  {renderPagination(roomPage, allRoomsMeta.totalPages, setRoomPage)}
                 </div>
-            )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
-            {/* Pagination UI */}
-            {!isLoadingRoomTypes && meta.totalPages > 1 && (
-                <div className="mt-10 flex items-center justify-between border-t border-muted pt-6 pb-10">
-                    <p className="text-sm text-muted-foreground">
-                        Menampilkan <span className="font-medium">{(currentPage - 1) * limit + 1}</span> sampai{" "}
-                        <span className="font-medium">
-                            {Math.min(currentPage * limit, meta.totalItems)}
-                        </span>{" "}
-                        dari <span className="font-medium">{meta.totalItems}</span> hasil
-                    </p>
-                    <Pagination className="mx-0 w-auto">
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        if (currentPage > 1) setCurrentPage(p => p - 1);
-                                    }}
-                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                                />
-                            </PaginationItem>
+      <Dialog open={!!selectedRoom} onOpenChange={(open) => !open && setSelectedRoom(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detail Kamar {selectedRoom?.roomNumber}</DialogTitle>
+            <DialogDescription>Lihat status kamar dan informasi penghuni aktif saat ini.</DialogDescription>
+          </DialogHeader>
 
-                            {[...Array(meta.totalPages)].map((_, i) => {
-                                const page = i + 1;
-                                if (
-                                    page === 1 ||
-                                    page === meta.totalPages ||
-                                    (page >= currentPage - 1 && page <= currentPage + 1)
-                                ) {
-                                    return (
-                                        <PaginationItem key={page}>
-                                            <PaginationLink
-                                                href="#"
-                                                isActive={currentPage === page}
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setCurrentPage(page);
-                                                }}
-                                            >
-                                                {page}
-                                            </PaginationLink>
-                                        </PaginationItem>
-                                    );
-                                } else if (
-                                    (page === 2 && currentPage > 3) ||
-                                    (page === meta.totalPages - 1 && currentPage < meta.totalPages - 2)
-                                ) {
-                                    return <PaginationItem key={page}><span className="px-2">...</span></PaginationItem>;
-                                }
-                                return null;
-                            })}
-
-                            <PaginationItem>
-                                <PaginationNext
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        if (currentPage < meta.totalPages) setCurrentPage(p => p + 1);
-                                    }}
-                                    className={currentPage === meta.totalPages ? "pointer-events-none opacity-50" : ""}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
+          {selectedRoom ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 rounded-lg border bg-muted/30 p-4 text-sm sm:grid-cols-2">
+                <div>
+                  <div className="text-muted-foreground">Nomor Kamar</div>
+                  <div className="font-medium">{selectedRoom.roomNumber}</div>
                 </div>
-            )}
-        </>
-    );
+                <div>
+                  <div className="text-muted-foreground">Status</div>
+                  <Badge variant={statusVariantMap[selectedRoom.status]}>{statusLabelMap[selectedRoom.status]}</Badge>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Tipe Kamar</div>
+                  <div className="font-medium">{selectedRoom.roomTypeName}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Properti</div>
+                  <div className="font-medium">{selectedRoom.propertyName}</div>
+                </div>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Informasi Penghuni</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {selectedRoom.currentBooking ? (
+                    <>
+                      <div className="flex items-center gap-2 font-medium">
+                        <UserRound className="h-4 w-4 text-primary" />
+                        {selectedRoom.currentBooking.tenantName}
+                      </div>
+                      <div>Email: {selectedRoom.currentBooking.tenantEmail}</div>
+                      <div>No. Telepon: {selectedRoom.currentBooking.tenantPhone || "-"}</div>
+                      <div>Kode Booking: {selectedRoom.currentBooking.bookingCode}</div>
+                      <div>Check-in: {dateLabel(selectedRoom.currentBooking.checkInAt)}</div>
+                      <div>Jatuh Tempo Berikutnya: {dateLabel(selectedRoom.currentBooking.nextDueDate)}</div>
+                    </>
+                  ) : (
+                    <div className="text-muted-foreground">Saat ini belum ada penghuni aktif pada kamar ini.</div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

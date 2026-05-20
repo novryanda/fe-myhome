@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CalendarDays, CreditCard, ExternalLink, Home, MapPin, ReceiptText } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CreditCard, Home, MapPin, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 
 import { PublicFooter } from "@/app/(external)/_components/public-footer";
 import { PublicHeader } from "@/app/(external)/_components/public-header";
+import { TenantManualPaymentDialog } from "@/components/tenant-manual-payment-dialog";
+import { TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +30,17 @@ const currency = (value?: number | null) =>
 
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
+
+const addPricingPeriod = (start: string | Date, pricingType?: string | null) => {
+  const nextDate = new Date(start);
+
+  if (pricingType === "WEEKLY") nextDate.setDate(nextDate.getDate() + 7);
+  if (pricingType === "MONTHLY") nextDate.setMonth(nextDate.getMonth() + 1);
+  if (pricingType === "THREE_MONTHLY") nextDate.setMonth(nextDate.getMonth() + 3);
+  if (pricingType === "YEARLY") nextDate.setFullYear(nextDate.getFullYear() + 1);
+
+  return nextDate;
+};
 
 const isPaymentLinkActive = (
   payment?: {
@@ -49,6 +64,9 @@ const isPaymentLinkActive = (
 export default function PublicBookingPaymentClient() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [isRenewalMethodDialogOpen, setIsRenewalMethodDialogOpen] = useState(false);
+  const [renewalMethodDefault, setRenewalMethodDefault] = useState<TenantPaymentMethod>("MIDTRANS");
 
   const bookingQuery = useQuery({
     queryKey: ["public-booking-payment", params.id],
@@ -106,6 +124,17 @@ export default function PublicBookingPaymentClient() {
       (!latestPayment || latestPayment?.category === "BOOKING") &&
       latestPayment?.status !== "PAID");
   const canPayRenewal = booking?.status === "ACTIVE" && booking?.isSubscription;
+  const latestManualProof = latestPayment?.latestManualProof;
+  const manualPaymentAccounts = booking?.property?.manualPaymentAccounts || [];
+  const manualSubmitUrl =
+    booking?.status === "ACTIVE" && booking?.isSubscription
+      ? `/api/payments/renewals/${booking?.id}/manual-proof`
+      : `/api/payments/bookings/${booking?.id}/manual-proof`;
+
+  const openPaymentMethodDialog = (preferredMethod: TenantPaymentMethod = "MIDTRANS") => {
+    setRenewalMethodDefault(preferredMethod);
+    setIsRenewalMethodDialogOpen(true);
+  };
 
   if (bookingQuery.isLoading) {
     return (
@@ -248,8 +277,8 @@ export default function PublicBookingPaymentClient() {
 
           <Card className="rounded-[32px] border border-blue-100 bg-white py-0 shadow-[0_20px_60px_-28px_rgba(29,78,216,0.22)]">
             <CardHeader className="pb-4">
-              <CardTitle className="text-2xl font-black tracking-tight text-zinc-950">Pembayaran Midtrans</CardTitle>
-              <CardDescription>Gunakan Midtrans untuk melanjutkan pembayaran booking ini.</CardDescription>
+              <CardTitle className="text-2xl font-black tracking-tight text-zinc-950">Metode Pembayaran</CardTitle>
+              <CardDescription>Pilih cara pembayaran yang ingin Anda gunakan untuk booking atau perpanjangan ini.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="rounded-[24px] bg-blue-50/70 p-4 text-sm">
@@ -278,30 +307,27 @@ export default function PublicBookingPaymentClient() {
                     <Button
                       className="w-full rounded-full bg-blue-700 hover:bg-blue-700"
                       size="lg"
-                      onClick={() => {
-                        window.location.href = latestPayment.paymentUrl;
-                      }}
+                      onClick={() => openPaymentMethodDialog()}
                     >
-                      Lanjut ke Midtrans
-                      <ExternalLink className="ml-2 h-4 w-4" />
+                      Pilih Metode Pembayaran
+                      <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   ) : (
                     <Button
                       className="w-full rounded-full bg-blue-700 hover:bg-blue-700"
                       size="lg"
-                      disabled={payBooking.isPending}
-                      onClick={() => payBooking.mutate({ bookingId: booking.id })}
+                      onClick={() => openPaymentMethodDialog()}
                     >
                       {latestPaymentExpired || booking.status === "EXPIRED"
-                        ? "Buat Ulang Pembayaran"
-                        : "Buat Pembayaran Midtrans"}
+                        ? "Pilih Ulang Metode Pembayaran"
+                        : "Pilih Metode Pembayaran"}
                       <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   )}
 
                   <p className="text-center text-sm leading-6 text-zinc-500">
-                    Setelah tombol ditekan, Anda akan diarahkan ke halaman checkout Midtrans untuk menyelesaikan
-                    pembayaran.
+                    Setelah memilih metode, Anda bisa lanjut ke Midtrans atau upload bukti transfer manual sesuai
+                    kebutuhan.
                   </p>
                 </>
               ) : canPayRenewal ? (
@@ -323,21 +349,18 @@ export default function PublicBookingPaymentClient() {
                     <Button
                       className="w-full rounded-full bg-blue-700 hover:bg-blue-700"
                       size="lg"
-                      onClick={() => {
-                        window.location.href = latestPayment.paymentUrl;
-                      }}
+                      onClick={() => openPaymentMethodDialog()}
                     >
-                      Lanjut ke Midtrans
-                      <ExternalLink className="ml-2 h-4 w-4" />
+                      Pilih Metode Pembayaran
+                      <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   ) : (
                     <Button
                       className="w-full rounded-full bg-blue-700 hover:bg-blue-700"
                       size="lg"
-                      disabled={payBooking.isPending}
-                      onClick={() => payBooking.mutate({ bookingId: booking.id, renewal: true })}
+                      onClick={() => openPaymentMethodDialog()}
                     >
-                      {latestPaymentExpired ? "Buat Link Perpanjangan Baru" : "Buat Pembayaran Perpanjangan"}
+                      {latestPaymentExpired ? "Pilih Pembayaran Perpanjangan" : "Buat Pembayaran Perpanjangan"}
                       <CreditCard className="ml-2 h-4 w-4" />
                     </Button>
                   )}
@@ -357,11 +380,95 @@ export default function PublicBookingPaymentClient() {
                   Booking ini tidak dapat dibayar lagi karena statusnya adalah {booking.status}.
                 </div>
               )}
+
+              {latestManualProof ? (
+                <div className="rounded-[24px] border bg-slate-50/80 p-4 text-sm">
+                  <div className="font-semibold text-zinc-950">Status bukti pembayaran manual terakhir</div>
+                  <div className="mt-1 text-zinc-500">
+                    {latestManualProof.status} - upload {dateLabel(latestManualProof.createdAt)} sebesar{" "}
+                    {currency(latestManualProof.transferAmount)}
+                  </div>
+                  {latestManualProof.adminNote ? (
+                    <div className="mt-2 text-zinc-600">Catatan admin: {latestManualProof.adminNote}</div>
+                  ) : null}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>
+
       </main>
       <PublicFooter />
+
+      <TenantManualPaymentDialog
+        open={isManualDialogOpen}
+        onOpenChange={setIsManualDialogOpen}
+        submitUrl={manualSubmitUrl}
+        propertyName={booking?.property?.name}
+        roomLabel={booking ? `${booking.roomType?.name || "-"} / ${booking.room?.roomNumber || "-"}` : null}
+        bookingCode={booking?.bookingCode || "-"}
+        periodLabel={
+          booking
+            ? canPayRenewal
+              ? (() => {
+                  const renewalStart = booking.currentPeriodEnd || booking.endDate;
+                  if (!renewalStart) {
+                    return null;
+                  }
+
+                  const renewalEnd = addPricingPeriod(renewalStart, booking.pricingType);
+                  return `${dateLabel(renewalStart)} - ${dateLabel(renewalEnd)}`;
+                })()
+              : `${dateLabel(booking.currentPeriodStart || booking.startDate)} - ${dateLabel(
+                  booking.currentPeriodEnd || booking.endDate,
+                )}`
+            : null
+        }
+        amount={canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment}
+        manualPaymentAccounts={manualPaymentAccounts}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["public-booking-payment", params.id] });
+          setIsManualDialogOpen(false);
+        }}
+      />
+
+      <TenantPaymentMethodDialog
+        open={isRenewalMethodDialogOpen}
+        onOpenChange={setIsRenewalMethodDialogOpen}
+        title={canPayRenewal ? "Pilih Pembayaran Perpanjangan" : "Pilih Metode Pembayaran"}
+        description={
+          canPayRenewal
+            ? "Tentukan apakah Anda ingin melanjutkan perpanjangan melalui Midtrans atau transfer manual."
+            : "Tentukan apakah Anda ingin melanjutkan pembayaran booking melalui Midtrans atau transfer manual."
+        }
+        amount={canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment}
+        propertyName={booking?.property?.name}
+        roomLabel={booking ? `${booking.roomType?.name || "-"} / ${booking.room?.roomNumber || "-"}` : null}
+        bookingCode={booking?.bookingCode || "-"}
+        manualPaymentAccounts={manualPaymentAccounts}
+        defaultMethod={renewalMethodDefault}
+        isSubmitting={payBooking.isPending}
+        onContinue={(method) => {
+          if (!booking) {
+            return;
+          }
+
+          if (method === "MIDTRANS") {
+            if (canPayRenewal && hasPendingRenewalPayment && latestPayment?.paymentUrl) {
+              window.location.href = latestPayment.paymentUrl;
+            } else if (canPayInitial && hasPendingInitialPayment && latestPayment?.paymentUrl) {
+              window.location.href = latestPayment.paymentUrl;
+            } else {
+              payBooking.mutate({ bookingId: booking.id, renewal: canPayRenewal });
+            }
+            setIsRenewalMethodDialogOpen(false);
+            return;
+          }
+
+          setIsRenewalMethodDialogOpen(false);
+          setIsManualDialogOpen(true);
+        }}
+      />
     </div>
   );
 }

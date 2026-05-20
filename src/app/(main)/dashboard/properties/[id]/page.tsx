@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import {
     Building2, MapPin, Loader2, CheckCircle2, XCircle,
-    Clock, Plus, LayoutGrid, Bed, DollarSign,
-    ArrowLeft, Trash, PowerOff, ImagePlus
+    Clock, Plus, LayoutGrid, Bed,
+    ArrowLeft, Trash, PowerOff, ImagePlus, Pencil
 } from "lucide-react";
 import {
     AlertDialog,
@@ -18,6 +20,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +29,21 @@ import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { Separator } from "@/components/ui/separator";
 import { PropertyGallery } from "../_components/property-gallery";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
+
+type ManualPaymentAccount = {
+    id: string;
+    propertyId: string;
+    label: string;
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    isVisible: boolean;
+    displayPriority: number;
+};
 
 export default function PropertyDetailPage() {
     const { id } = useParams();
@@ -35,6 +51,16 @@ export default function PropertyDetailPage() {
     const queryClient = useQueryClient();
     const { data: session } = useSession();
     const user = session?.user;
+    const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<ManualPaymentAccount | null>(null);
+    const [accountForm, setAccountForm] = useState({
+        label: "",
+        bankName: "",
+        accountNumber: "",
+        accountHolder: "",
+        isVisible: true,
+        displayPriority: 1,
+    });
 
     const { data: propertyData, isLoading, error } = useQuery({
         queryKey: ["property", id],
@@ -55,6 +81,89 @@ export default function PropertyDetailPage() {
         enabled: !!propertyData && propertyData.status === "APPROVED",
         staleTime: 0,
         refetchOnWindowFocus: true,
+    });
+
+    const { data: manualPaymentAccounts = [], isLoading: isLoadingManualPaymentAccounts } = useQuery({
+        queryKey: ["property-manual-payment-accounts", id],
+        queryFn: async () => {
+            const response = await api.get(`/api/properties/${id}/manual-payment-accounts`);
+            return (response.data?.data || []) as ManualPaymentAccount[];
+        },
+        enabled: !!id,
+        staleTime: 0,
+        refetchOnWindowFocus: true,
+    });
+
+    const manualPaymentAccountMutation = useMutation({
+        mutationFn: async () => {
+            const payload = {
+                label: accountForm.label,
+                bank_name: accountForm.bankName,
+                account_number: accountForm.accountNumber,
+                account_holder: accountForm.accountHolder,
+                is_visible: accountForm.isVisible,
+                display_priority: Number(accountForm.displayPriority),
+            };
+
+            if (editingAccount) {
+                const response = await api.patch(`/api/properties/${id}/manual-payment-accounts/${editingAccount.id}`, payload);
+                return response.data.data;
+            }
+
+            const response = await api.post(`/api/properties/${id}/manual-payment-accounts`, payload);
+            return response.data.data;
+        },
+        onSuccess: () => {
+            toast.success(editingAccount ? "Rekening pembayaran manual berhasil diperbarui." : "Rekening pembayaran manual berhasil ditambahkan.");
+            queryClient.invalidateQueries({ queryKey: ["property-manual-payment-accounts", id] });
+            setIsAccountDialogOpen(false);
+            setEditingAccount(null);
+            setAccountForm({
+                label: "",
+                bankName: "",
+                accountNumber: "",
+                accountHolder: "",
+                isVisible: true,
+                displayPriority: 1,
+            });
+        },
+        onError: (err: any) => {
+            toast.error(err.response?.data?.message || "Gagal menyimpan rekening pembayaran manual");
+        },
+    });
+
+    const deleteManualPaymentAccountMutation = useMutation({
+        mutationFn: async (accountId: string) => {
+            await api.delete(`/api/properties/${id}/manual-payment-accounts/${accountId}`);
+        },
+        onSuccess: () => {
+            toast.success("Rekening pembayaran manual berhasil dihapus.");
+            queryClient.invalidateQueries({ queryKey: ["property-manual-payment-accounts", id] });
+        },
+        onError: (err: any) => {
+            toast.error(err.response?.data?.message || "Gagal menghapus rekening pembayaran manual");
+        },
+    });
+
+    const toggleManualPaymentAccountMutation = useMutation({
+        mutationFn: async (account: ManualPaymentAccount) => {
+            const response = await api.patch(`/api/properties/${id}/manual-payment-accounts/${account.id}`, {
+                label: account.label,
+                bank_name: account.bankName,
+                account_number: account.accountNumber,
+                account_holder: account.accountHolder,
+                is_visible: !account.isVisible,
+                display_priority: account.displayPriority,
+            });
+            return response.data.data;
+        },
+        onSuccess: () => {
+            toast.success("Status tampil rekening berhasil diperbarui.");
+            queryClient.invalidateQueries({ queryKey: ["property-manual-payment-accounts", id] });
+        },
+        onError: (err: any) => {
+            toast.error(err.response?.data?.message || "Gagal memperbarui status rekening");
+        },
     });
 
     const approveMutation = useMutation({
@@ -104,6 +213,33 @@ export default function PropertyDetailPage() {
 
     const isApproved = propertyData.status === "APPROVED";
     const isSuperadmin = user?.role === "SUPERADMIN";
+    const canManageProperty = isSuperadmin || propertyData.adminId === user?.id;
+
+    const openCreateAccountDialog = () => {
+        setEditingAccount(null);
+        setAccountForm({
+            label: "",
+            bankName: "",
+            accountNumber: "",
+            accountHolder: "",
+            isVisible: true,
+            displayPriority: 1,
+        });
+        setIsAccountDialogOpen(true);
+    };
+
+    const openEditAccountDialog = (account: ManualPaymentAccount) => {
+        setEditingAccount(account);
+        setAccountForm({
+            label: account.label,
+            bankName: account.bankName,
+            accountNumber: account.accountNumber,
+            accountHolder: account.accountHolder,
+            isVisible: account.isVisible,
+            displayPriority: account.displayPriority,
+        });
+        setIsAccountDialogOpen(true);
+    };
 
     return (
         <div className="flex-1 space-y-6 p-8 pt-6">
@@ -215,9 +351,16 @@ export default function PropertyDetailPage() {
                     </Card>
 
                     <Tabs defaultValue="inventory" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-                            <TabsTrigger value="inventory">Inventaris Kamar</TabsTrigger>
-                            <TabsTrigger value="details">Detail Properti</TabsTrigger>
+                        <TabsList className="grid h-auto w-full grid-cols-[1.15fr_1fr_1.7fr] lg:w-[760px]">
+                            <TabsTrigger value="inventory" className="px-4">
+                                Inventaris Kamar
+                            </TabsTrigger>
+                            <TabsTrigger value="details" className="px-4">
+                                Detail Properti
+                            </TabsTrigger>
+                            <TabsTrigger value="manual-payment-accounts" className="px-4">
+                                Rekening Pembayaran Manual
+                            </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="inventory" className="space-y-4 pt-4">
@@ -347,6 +490,83 @@ export default function PropertyDetailPage() {
                                 </CardContent>
                             </Card>
                         </TabsContent>
+
+                        <TabsContent value="manual-payment-accounts" className="pt-4">
+                            <Card className="border-none shadow-md">
+                                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                                    <div>
+                                        <CardTitle>Rekening Pembayaran Manual</CardTitle>
+                                        <CardDescription>
+                                            Tambahkan satu atau lebih rekening tujuan transfer yang bisa dipilih tenant saat membayar manual.
+                                        </CardDescription>
+                                    </div>
+                                    {canManageProperty ? (
+                                        <Button onClick={openCreateAccountDialog}>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Tambah Rekening
+                                        </Button>
+                                    ) : null}
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {isLoadingManualPaymentAccounts ? (
+                                        <div className="py-8 text-center text-muted-foreground">Memuat rekening pembayaran manual...</div>
+                                    ) : manualPaymentAccounts.length ? (
+                                        <div className="space-y-3">
+                                            {manualPaymentAccounts.map((account) => (
+                                                <div key={account.id} className="rounded-xl border p-4">
+                                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                                        <div className="space-y-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <div className="text-lg font-semibold">{account.label}</div>
+                                                                <Badge variant={account.isVisible ? "default" : "secondary"}>
+                                                                    {account.isVisible ? "Ditampilkan" : "Disembunyikan"}
+                                                                </Badge>
+                                                                <Badge variant="outline">Prioritas {account.displayPriority}</Badge>
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground">
+                                                                {account.bankName} - {account.accountNumber}
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground">a.n. {account.accountHolder}</div>
+                                                        </div>
+                                                        {canManageProperty ? (
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
+                                                                    <Switch
+                                                                        checked={account.isVisible}
+                                                                        onCheckedChange={() => toggleManualPaymentAccountMutation.mutate(account)}
+                                                                        disabled={toggleManualPaymentAccountMutation.isPending}
+                                                                    />
+                                                                    <span className="text-sm text-muted-foreground">
+                                                                        {account.isVisible ? "Sedang tampil" : "Tidak tampil"}
+                                                                    </span>
+                                                                </div>
+                                                                <Button variant="outline" size="sm" onClick={() => openEditAccountDialog(account)}>
+                                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                                    Edit
+                                                                </Button>
+                                                                <Button
+                                                                    variant="destructive"
+                                                                    size="sm"
+                                                                    onClick={() => deleteManualPaymentAccountMutation.mutate(account.id)}
+                                                                    disabled={deleteManualPaymentAccountMutation.isPending}
+                                                                >
+                                                                    <Trash className="mr-2 h-4 w-4" />
+                                                                    Hapus
+                                                                </Button>
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                                            Belum ada rekening pembayaran manual untuk properti ini.
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
                     </Tabs>
                 </div>
 
@@ -374,6 +594,108 @@ export default function PropertyDetailPage() {
                     </Card>
                 </div>
             </div>
+
+            <Dialog
+                open={isAccountDialogOpen}
+                onOpenChange={(open) => {
+                    if (!manualPaymentAccountMutation.isPending) {
+                        setIsAccountDialogOpen(open);
+                        if (!open) {
+                            setEditingAccount(null);
+                        }
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>{editingAccount ? "Edit Rekening Pembayaran Manual" : "Tambah Rekening Pembayaran Manual"}</DialogTitle>
+                        <DialogDescription>
+                            Rekening yang ditandai tampil akan muncul sebagai pilihan tenant saat mereka membayar secara manual.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual-account-label">Label Rekening</Label>
+                            <Input
+                                id="manual-account-label"
+                                value={accountForm.label}
+                                onChange={(event) => setAccountForm((prev) => ({ ...prev, label: event.target.value }))}
+                                placeholder="Contoh: Rekening Operasional Utama"
+                            />
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual-account-bank-name">Nama Bank</Label>
+                                <Input
+                                    id="manual-account-bank-name"
+                                    value={accountForm.bankName}
+                                    onChange={(event) => setAccountForm((prev) => ({ ...prev, bankName: event.target.value }))}
+                                    placeholder="Contoh: BCA"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual-account-number">Nomor Rekening</Label>
+                                <Input
+                                    id="manual-account-number"
+                                    value={accountForm.accountNumber}
+                                    onChange={(event) => setAccountForm((prev) => ({ ...prev, accountNumber: event.target.value }))}
+                                    placeholder="1234567890"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual-account-holder">Nama Pemilik Rekening</Label>
+                                <Input
+                                    id="manual-account-holder"
+                                    value={accountForm.accountHolder}
+                                    onChange={(event) => setAccountForm((prev) => ({ ...prev, accountHolder: event.target.value }))}
+                                    placeholder="Nama pemilik rekening"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual-account-priority">Prioritas Tampil</Label>
+                                <Input
+                                    id="manual-account-priority"
+                                    type="number"
+                                    min={1}
+                                    value={accountForm.displayPriority}
+                                    onChange={(event) => setAccountForm((prev) => ({ ...prev, displayPriority: Number(event.target.value) || 1 }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                            <div>
+                                <div className="font-medium">Tampilkan ke Tenant</div>
+                                <div className="text-sm text-muted-foreground">Jika aktif, rekening ini akan muncul sebagai pilihan pembayaran manual.</div>
+                            </div>
+                            <Switch
+                                checked={accountForm.isVisible}
+                                onCheckedChange={(checked) => setAccountForm((prev) => ({ ...prev, isVisible: checked }))}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAccountDialogOpen(false)} disabled={manualPaymentAccountMutation.isPending}>
+                            Batal
+                        </Button>
+                        <Button
+                            onClick={() => manualPaymentAccountMutation.mutate()}
+                            disabled={
+                                manualPaymentAccountMutation.isPending ||
+                                !accountForm.label.trim() ||
+                                !accountForm.bankName.trim() ||
+                                !accountForm.accountNumber.trim() ||
+                                !accountForm.accountHolder.trim()
+                            }
+                        >
+                            {manualPaymentAccountMutation.isPending ? "Menyimpan..." : editingAccount ? "Simpan Perubahan" : "Tambah Rekening"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

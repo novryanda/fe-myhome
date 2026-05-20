@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   Banknote,
   Bed,
+  ClipboardCheck,
   Handbag,
   HomeIcon,
   LayoutDashboard,
@@ -100,6 +101,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Order & Transaksi",
         url: "/dashboard/order",
         icon: Handbag,
+        roles: ["SUPERADMIN", "ADMIN"],
+      },
+      {
+        title: "Verifikasi Pembayaran Manual",
+        url: "/dashboard/manual-payment-proofs",
+        icon: ClipboardCheck,
         roles: ["SUPERADMIN", "ADMIN"],
       },
       {
