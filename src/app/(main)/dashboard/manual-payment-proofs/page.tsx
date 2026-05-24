@@ -29,10 +29,19 @@ import { useSession } from "@/lib/auth-client";
 import { PageHero } from "../_components/page-hero";
 
 const currency = (value: number) =>
-  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const dateLabel = (value?: string | Date | null) =>
-  value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
+  value
+    ? new Intl.DateTimeFormat("id-ID", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "-";
 
 type ProofStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
 type ProofStatusFilter = ProofStatus | "ALL";
@@ -44,6 +53,14 @@ const proofStatusTabs: Array<{ value: ProofStatusFilter; label: string }> = [
   { value: "REJECTED", label: "Rejected" },
   { value: "REVISION_REQUIRED", label: "Perlu Revisi" },
 ];
+
+type ManualPaymentProofSummary = {
+  all: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  revisionRequired: number;
+};
 
 type ManualPaymentProofRow = {
   id: string;
@@ -127,6 +144,17 @@ type ManualPaymentProofDetail = {
   }>;
 };
 
+type ManualPaymentProofListResponse = {
+  data?: ManualPaymentProofRow[];
+  summary?: ManualPaymentProofSummary;
+  paging?: {
+    current_page: number;
+    size: number;
+    total_page: number;
+    total_items: number;
+  };
+};
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
   if (typeof message === "string" && message) {
@@ -159,7 +187,7 @@ export default function ManualPaymentProofsPage() {
           size: pageSize,
         },
       });
-      return response.data;
+      return response.data as ManualPaymentProofListResponse;
     },
     enabled: !!session?.user && session.user.role !== "USER",
     placeholderData: keepPreviousData,
@@ -172,23 +200,6 @@ export default function ManualPaymentProofsPage() {
         params: { page: 1, size: 100 },
       });
       return (response.data?.data || []) as Array<{ id: string; name: string }>;
-    },
-    enabled: !!session?.user && session.user.role !== "USER",
-  });
-
-  const pendingCountQuery = useQuery({
-    queryKey: ["manual-payment-proofs-pending-count", search, propertyId],
-    queryFn: async () => {
-      const response = await api.get("/api/payments/manual-proofs", {
-        params: {
-          search: search || undefined,
-          status: "PENDING",
-          propertyId: propertyId === "ALL" ? undefined : propertyId,
-          page: 1,
-          size: 1,
-        },
-      });
-      return Number(response.data?.paging?.total_items || 0);
     },
     enabled: !!session?.user && session.user.role !== "USER",
   });
@@ -257,7 +268,9 @@ export default function ManualPaymentProofsPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
       queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["manual-payment-proof-detail", selectedProofId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manual-payment-proof-detail", selectedProofId],
+      });
       setAdminNote("");
     },
     onError: (error: unknown) => {
@@ -303,6 +316,57 @@ export default function ManualPaymentProofsPage() {
 
   const proofs = (proofsQuery.data?.data || []) as ManualPaymentProofRow[];
   const paging = proofsQuery.data?.paging;
+  const summary = proofsQuery.data?.summary || {
+    all: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    revisionRequired: 0,
+  };
+  const tabCountMap: Record<ProofStatusFilter, number> = {
+    ALL: summary.all,
+    PENDING: summary.pending,
+    APPROVED: summary.approved,
+    REJECTED: summary.rejected,
+    REVISION_REQUIRED: summary.revisionRequired,
+  };
+  const kpiCards = [
+    {
+      title: "Total Bukti",
+      value: summary.all,
+      description: "Semua bukti yang cocok dengan filter aktif.",
+      tone: "text-slate-900",
+      accent: "bg-slate-900/5 text-slate-700",
+    },
+    {
+      title: "Pending Review",
+      value: summary.pending,
+      description: "Menunggu verifikasi dari admin.",
+      tone: "text-amber-600",
+      accent: "bg-amber-100 text-amber-700",
+    },
+    {
+      title: "Approved",
+      value: summary.approved,
+      description: "Sudah diverifikasi dan ditandai lunas.",
+      tone: "text-emerald-600",
+      accent: "bg-emerald-100 text-emerald-700",
+    },
+    {
+      title: "Rejected",
+      value: summary.rejected,
+      description: "Ditolak dan perlu tindak lanjut.",
+      tone: "text-rose-600",
+      accent: "bg-rose-100 text-rose-700",
+    },
+    {
+      title: "Perlu Revisi",
+      value: summary.revisionRequired,
+      description: "Masih menunggu unggahan perbaikan.",
+      tone: "text-sky-600",
+      accent: "bg-sky-100 text-sky-700",
+    },
+  ];
 
   return (
     <div className="space-y-6 p-8 pt-6">
@@ -343,6 +407,27 @@ export default function ManualPaymentProofsPage() {
         }
       />
 
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {kpiCards.map((card) => (
+          <Card key={card.title} className="border-slate-200/80 shadow-sm">
+            <CardContent className="space-y-3 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="font-medium text-muted-foreground text-sm">{card.title}</div>
+                  <div className={`font-semibold text-3xl leading-none ${card.tone}`}>{card.value}</div>
+                </div>
+                <span
+                  className={`inline-flex min-w-10 items-center justify-center rounded-full px-3 py-1 font-semibold text-xs ${card.accent}`}
+                >
+                  {card.value}
+                </span>
+              </div>
+              <p className="text-muted-foreground text-sm">{card.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Daftar Bukti Pembayaran</CardTitle>
@@ -367,11 +452,15 @@ export default function ManualPaymentProofsPage() {
                   className="h-10 flex-none gap-2 rounded-xl px-5 font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
                 >
                   <span>{tab.label}</span>
-                  {tab.value === "PENDING" ? (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1.5 font-semibold text-[11px] text-red-600 leading-none">
-                      {pendingCountQuery.data ?? 0}
-                    </span>
-                  ) : null}
+                  <span
+                    className={
+                      tab.value === "PENDING"
+                        ? "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1.5 font-semibold text-[11px] text-red-600 leading-none"
+                        : "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-200 px-1.5 font-semibold text-[11px] text-slate-600 leading-none"
+                    }
+                  >
+                    {tabCountMap[tab.value]}
+                  </span>
                 </TabsTrigger>
               ))}
             </TabsList>
