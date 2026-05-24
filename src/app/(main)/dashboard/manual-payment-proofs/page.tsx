@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
@@ -34,6 +35,15 @@ const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "-";
 
 type ProofStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+type ProofStatusFilter = ProofStatus | "ALL";
+
+const proofStatusTabs: Array<{ value: ProofStatusFilter; label: string }> = [
+  { value: "ALL", label: "Semua" },
+  { value: "PENDING", label: "Pending" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "REVISION_REQUIRED", label: "Perlu Revisi" },
+];
 
 type ManualPaymentProofRow = {
   id: string;
@@ -130,7 +140,7 @@ export default function ManualPaymentProofsPage() {
   const { data: session, isPending } = useSession();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<ProofStatus | "ALL">("PENDING");
+  const [status, setStatus] = useState<ProofStatusFilter>("PENDING");
   const [propertyId, setPropertyId] = useState("ALL");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -162,6 +172,23 @@ export default function ManualPaymentProofsPage() {
         params: { page: 1, size: 100 },
       });
       return (response.data?.data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!session?.user && session.user.role !== "USER",
+  });
+
+  const pendingCountQuery = useQuery({
+    queryKey: ["manual-payment-proofs-pending-count", search, propertyId],
+    queryFn: async () => {
+      const response = await api.get("/api/payments/manual-proofs", {
+        params: {
+          search: search || undefined,
+          status: "PENDING",
+          propertyId: propertyId === "ALL" ? undefined : propertyId,
+          page: 1,
+          size: 1,
+        },
+      });
+      return Number(response.data?.paging?.total_items || 0);
     },
     enabled: !!session?.user && session.user.role !== "USER",
   });
@@ -294,24 +321,6 @@ export default function ManualPaymentProofsPage() {
               className="w-[320px]"
             />
             <Select
-              value={status}
-              onValueChange={(value) => {
-                setStatus(value as ProofStatus | "ALL");
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Semua Status</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="APPROVED">Approved</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
-                <SelectItem value="REVISION_REQUIRED">Revision Required</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
               value={propertyId}
               onValueChange={(value) => {
                 setPropertyId(value);
@@ -337,9 +346,37 @@ export default function ManualPaymentProofsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Daftar Bukti Pembayaran</CardTitle>
-          <CardDescription>Proof terbaru tetap tersimpan sebagai history, termasuk bukti yang ditolak atau diminta revisi.</CardDescription>
+          <CardDescription>
+            Proof terbaru tetap tersimpan sebagai history, termasuk bukti yang ditolak atau diminta revisi.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <Tabs
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value as ProofStatusFilter);
+              setPage(1);
+            }}
+            className="w-full"
+          >
+            <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-slate-200/80 bg-slate-100/80 p-1 shadow-sm group-data-[orientation=horizontal]/tabs:h-auto">
+              {proofStatusTabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="h-10 flex-none gap-2 rounded-xl px-5 font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
+                >
+                  <span>{tab.label}</span>
+                  {tab.value === "PENDING" ? (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-100 px-1.5 font-semibold text-[11px] text-red-600 leading-none">
+                      {pendingCountQuery.data ?? 0}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -461,7 +498,9 @@ export default function ManualPaymentProofsPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Detail Bukti Pembayaran</DialogTitle>
-            <DialogDescription>Review detail transfer, file bukti, dan history verifikasi sebelum mengambil keputusan.</DialogDescription>
+            <DialogDescription>
+              Review detail transfer, file bukti, dan history verifikasi sebelum mengambil keputusan.
+            </DialogDescription>
           </DialogHeader>
 
           {detailQuery.isLoading ? (
@@ -493,13 +532,16 @@ export default function ManualPaymentProofsPage() {
                     <div>Status Payment: {detailQuery.data.payment.status}</div>
                     <div>Nominal Tagihan: {currency(detailQuery.data.payment.amount)}</div>
                     <div>Nominal Transfer: {currency(detailQuery.data.transferAmount)}</div>
-                    <div>Periode Aktif: {dateLabel(detailQuery.data.booking.currentPeriodStart)} - {dateLabel(detailQuery.data.booking.currentPeriodEnd)}</div>
+                    <div>
+                      Periode Aktif: {dateLabel(detailQuery.data.booking.currentPeriodStart)} -{" "}
+                      {dateLabel(detailQuery.data.booking.currentPeriodEnd)}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
 
               {amountWarning ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 text-sm">
                   {amountWarning}
                 </div>
               ) : null}
@@ -529,8 +571,9 @@ export default function ManualPaymentProofsPage() {
                         : "-"}
                     </div>
                     {detailQuery.data.destinationAccount ? (
-                      <div className="text-xs text-muted-foreground">
-                        {detailQuery.data.destinationAccount.accountNumber} / a.n. {detailQuery.data.destinationAccount.accountHolder}
+                      <div className="text-muted-foreground text-xs">
+                        {detailQuery.data.destinationAccount.accountNumber} / a.n.{" "}
+                        {detailQuery.data.destinationAccount.accountHolder}
                       </div>
                     ) : null}
                   </div>
@@ -547,7 +590,9 @@ export default function ManualPaymentProofsPage() {
                             return;
                           }
 
-                          fileUrlMutation.mutate(detailQuery.data!.id);
+                          if (detailQuery.data?.id) {
+                            fileUrlMutation.mutate(detailQuery.data.id);
+                          }
                         }}
                         disabled={fileUrlMutation.isPending || filePreviewQuery.isLoading}
                       >
@@ -564,7 +609,7 @@ export default function ManualPaymentProofsPage() {
                     <div className="text-muted-foreground">Preview Bukti</div>
                     <div className="mt-2 overflow-hidden rounded-lg border bg-muted/20">
                       {filePreviewQuery.isLoading ? (
-                        <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
+                        <div className="flex h-[320px] items-center justify-center text-muted-foreground text-sm">
                           Memuat preview bukti pembayaran...
                         </div>
                       ) : previewUrl && isImagePreview ? (
@@ -573,7 +618,7 @@ export default function ManualPaymentProofsPage() {
                           <img
                             src={previewUrl}
                             alt={detailQuery.data.originalFilename}
-                            className="max-h-[420px] w-full object-contain bg-white"
+                            className="max-h-[420px] w-full bg-white object-contain"
                           />
                         </>
                       ) : previewUrl && isPdfPreview ? (
@@ -583,7 +628,7 @@ export default function ManualPaymentProofsPage() {
                           className="h-[420px] w-full bg-white"
                         />
                       ) : previewUrl ? (
-                        <div className="flex h-[220px] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-muted-foreground">
+                        <div className="flex h-[220px] flex-col items-center justify-center gap-3 px-4 text-center text-muted-foreground text-sm">
                           <div>Preview inline belum tersedia untuk tipe file ini.</div>
                           <Button
                             size="sm"
@@ -595,7 +640,7 @@ export default function ManualPaymentProofsPage() {
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex h-[220px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                        <div className="flex h-[220px] items-center justify-center px-4 text-center text-muted-foreground text-sm">
                           Preview bukti belum tersedia. Gunakan tombol "Buka Bukti" untuk mencoba memuat ulang file.
                         </div>
                       )}
@@ -631,7 +676,7 @@ export default function ManualPaymentProofsPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-sm text-muted-foreground">Belum ada history verifikasi.</div>
+                    <div className="text-muted-foreground text-sm">Belum ada history verifikasi.</div>
                   )}
                 </CardContent>
               </Card>
@@ -667,38 +712,44 @@ export default function ManualPaymentProofsPage() {
                 <Button
                   variant="outline"
                   disabled={actionMutation.isPending}
-                  onClick={() =>
+                  onClick={() => {
+                    if (!detailQuery.data?.id) return;
+
                     actionMutation.mutate({
-                      proofId: detailQuery.data!.id,
+                      proofId: detailQuery.data.id,
                       action: "request-revision",
                       admin_note: adminNote,
-                    })
-                  }
+                    });
+                  }}
                 >
                   Minta Revisi
                 </Button>
                 <Button
                   variant="destructive"
                   disabled={actionMutation.isPending}
-                  onClick={() =>
+                  onClick={() => {
+                    if (!detailQuery.data?.id) return;
+
                     actionMutation.mutate({
-                      proofId: detailQuery.data!.id,
+                      proofId: detailQuery.data.id,
                       action: "reject",
                       admin_note: adminNote,
-                    })
-                  }
+                    });
+                  }}
                 >
                   Tolak
                 </Button>
                 <Button
                   disabled={actionMutation.isPending}
-                  onClick={() =>
+                  onClick={() => {
+                    if (!detailQuery.data?.id) return;
+
                     actionMutation.mutate({
-                      proofId: detailQuery.data!.id,
+                      proofId: detailQuery.data.id,
                       action: "approve",
                       admin_note: adminNote || undefined,
-                    })
-                  }
+                    });
+                  }}
                 >
                   Approve & Tandai Lunas
                 </Button>
