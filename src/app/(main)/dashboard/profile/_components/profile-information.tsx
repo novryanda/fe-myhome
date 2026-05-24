@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { normalizeAssetUrl } from "@/lib/asset-url";
 import { authClient } from "@/lib/auth-client";
 import { getInitials } from "@/lib/utils";
 
@@ -47,7 +48,7 @@ export function ProfileInformation({ user }: { user: ProfileInformationUser }) {
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState("");
   const [adminNotifyPhones, setAdminNotifyPhones] = useState<string[]>([""]);
-  const [avatarUrl, setAvatarUrl] = useState(user?.image || "");
+  const [avatarUrl, setAvatarUrl] = useState(normalizeAssetUrl(user?.image || ""));
   const [previewUrl, setPreviewUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
@@ -154,7 +155,7 @@ export function ProfileInformation({ user }: { user: ProfileInformationUser }) {
     try {
       const { error } = await authClient.updateUser({
         name,
-        image: avatarUrl,
+        image: normalizeAssetUrl(avatarUrl),
       });
 
       if (error) {

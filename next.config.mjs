@@ -1,4 +1,20 @@
-const storageHostname = process.env.NEXT_PUBLIC_STORAGE_HOSTNAME;
+const publicAssetBaseUrl =
+  process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL ||
+  process.env.NEXT_PUBLIC_STORAGE_HOSTNAME;
+
+let storageHostname = "";
+
+if (publicAssetBaseUrl) {
+  try {
+    storageHostname = new URL(
+      /^https?:\/\//i.test(publicAssetBaseUrl)
+        ? publicAssetBaseUrl
+        : `https://${publicAssetBaseUrl}`
+    ).hostname;
+  } catch {
+    storageHostname = "";
+  }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,10 +27,6 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "res.cloudinary.com",
-      },
-      {
-        protocol: "https",
-        hostname: "**.r2.dev",
       },
       ...(storageHostname
         ? [

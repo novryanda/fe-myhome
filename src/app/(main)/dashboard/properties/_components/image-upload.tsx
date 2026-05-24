@@ -6,6 +6,7 @@ import { Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { normalizeAssetUrl } from "@/lib/asset-url";
 import { cn } from "@/lib/utils";
 
 interface ImageUploadProps {
@@ -96,7 +97,7 @@ export function ImageUpload({ onUpload, onRemove, value, maxImages = 5, classNam
             className="group relative aspect-video overflow-hidden rounded-xl border-2 border-primary/10 bg-muted shadow-sm transition-all hover:shadow-md"
           >
             <img
-              src={url}
+              src={normalizeAssetUrl(url)}
               alt={`Property ${index + 1}`}
               className="h-full w-full object-cover transition-transform group-hover:scale-110"
             />

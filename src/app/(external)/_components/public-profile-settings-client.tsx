@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { authClient, useSession } from "@/lib/auth-client";
 import { api } from "@/lib/api";
+import { normalizeAssetUrl } from "@/lib/asset-url";
 import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ export function PublicProfileSettingsClient() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [name, setName] = useState(session?.user?.name || "");
   const [phone, setPhone] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState((session?.user as any)?.image || "");
+  const [avatarUrl, setAvatarUrl] = useState(normalizeAssetUrl((session?.user as any)?.image || ""));
   const [previewUrl, setPreviewUrl] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -40,7 +41,7 @@ export function PublicProfileSettingsClient() {
   useEffect(() => {
     if (!session?.user) return;
     setName(session.user.name || "");
-    setAvatarUrl((session.user as any).image || "");
+    setAvatarUrl(normalizeAssetUrl((session.user as any).image || ""));
   }, [session?.user]);
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export function PublicProfileSettingsClient() {
     try {
       const { error } = await authClient.updateUser({
         name,
-        image: avatarUrl,
+        image: normalizeAssetUrl(avatarUrl),
       });
 
       if (error) {
