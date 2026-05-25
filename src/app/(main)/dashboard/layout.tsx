@@ -1,23 +1,22 @@
 import type { ReactNode } from "react";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
+import { GlobalSearch } from "@/components/search/global-search";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { users } from "@/data/users";
+import { authClient } from "@/lib/auth-client";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
 import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
-import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
-import { authClient } from "@/lib/auth-client";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { GlobalSearch } from "@/components/search/global-search";
 import { SearchTrigger } from "./_components/sidebar/search-trigger";
+import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const { data: session } = await authClient.getSession({

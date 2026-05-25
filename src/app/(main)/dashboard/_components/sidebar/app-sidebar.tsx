@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -12,9 +13,9 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useSession } from "@/lib/auth-client";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
-import { useSession } from "@/lib/auth-client";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
@@ -34,26 +35,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Filter sidebar items based on user role
   const userRole = session?.user?.role || "USER";
-  const filteredSidebarItems = sidebarItems.map(group => ({
-    ...group,
-    items: group.items
-      .filter(item => !item.roles || item.roles.includes(userRole))
-      .map(item => ({
-        ...item,
-        subItems: item.subItems?.filter(sub => !sub.roles || sub.roles.includes(userRole))
-      }))
-      .filter(item => !item.subItems || item.subItems.length > 0)
-  })).filter(group => group.items.length > 0);
+  const filteredSidebarItems = sidebarItems
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !item.roles || item.roles.includes(userRole))
+        .map((item) => ({
+          ...item,
+          subItems: item.subItems?.filter((sub) => !sub.roles || sub.roles.includes(userRole)),
+        }))
+        .filter((item) => !item.subItems || item.subItems.length > 0),
+    }))
+    .filter((group) => group.items.length > 0);
 
-  const userData = session?.user ? {
-    name: session.user.name,
-    email: session.user.email,
-    avatar: session.user.image || undefined,
-  } : {
-    name: "Tamu",
-    email: "Belum masuk",
-    avatar: undefined,
-  };
+  const userData = session?.user
+    ? {
+        name: session.user.name,
+        email: session.user.email,
+        avatar: session.user.image || undefined,
+      }
+    : {
+        name: "Tamu",
+        email: "Belum masuk",
+        avatar: undefined,
+      };
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Building2, MapPin } from "lucide-react";
 
-import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 
 import { PublicFooter } from "../../_components/public-footer";
 import { PublicHeader } from "../../_components/public-header";
@@ -73,7 +74,9 @@ export default function CityDetailPage() {
         <div className="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Daftar properti</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">Properti di {city.name}</h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
+              Properti di {city.name}
+            </h2>
           </div>
           <div className="rounded-full border border-blue-100 bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm">
             {city.properties?.length || 0} hasil

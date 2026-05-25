@@ -1,7 +1,8 @@
+import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { redirect as nextRedirect } from "next/navigation";
+
 import { Building2, ShieldCheck, UserRound } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +41,9 @@ export default async function RegisterV1({
 
           <div className="space-y-3">
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Buat akun</div>
-            <h1 className="text-4xl font-black tracking-tight text-zinc-950">Pilih jenis akun yang ingin Anda gunakan</h1>
+            <h1 className="text-4xl font-black tracking-tight text-zinc-950">
+              Pilih jenis akun yang ingin Anda gunakan
+            </h1>
             <p className="max-w-xl text-sm leading-7 text-zinc-600 sm:text-base">
               Form registrasi untuk pencari kos dan mitra properti saya pisahkan agar alur penggunaan setelah login
               langsung sesuai dengan kebutuhan masing-masing.
@@ -85,7 +88,9 @@ export default async function RegisterV1({
               Registrasi Multi-Akun
             </div>
             <div className="space-y-3">
-              <h2 className="text-4xl font-black tracking-tight">Satu platform untuk pencari kos dan pengelola properti.</h2>
+              <h2 className="text-4xl font-black tracking-tight">
+                Satu platform untuk pencari kos dan pengelola properti.
+              </h2>
               <p className="text-sm leading-7 text-white/80">
                 User dapat mencari dan booking kamar. Mitra dapat mengelola properti, penghuni, transaksi, dan pencairan
                 dana dari dashboard operasional.

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -188,7 +189,10 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
         <div className="grid lg:grid-cols-[1.25fr_0.75fr]">
           <div className="px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
             <Link href="/">
-              <Button variant="outline" className="rounded-full border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+              <Button
+                variant="outline"
+                className="rounded-full border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Kembali
               </Button>
@@ -218,7 +222,6 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
               <MapPin className="mt-1 h-5 w-5 shrink-0 text-blue-700" />
               <span className="underline decoration-blue-200 underline-offset-4">{property.address}</span>
             </a>
-
           </div>
 
           <div className="border-t border-blue-100 bg-white/80 p-5 sm:p-8 lg:border-l lg:border-t-0">
@@ -263,16 +266,15 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
           <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="relative overflow-hidden rounded-[32px] border border-blue-100 bg-blue-50">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={heroImage?.url}
-                alt={property.name}
-                className="aspect-[16/11] h-full w-full object-cover"
-              />
+              <img src={heroImage?.url} alt={property.name} className="aspect-[16/11] h-full w-full object-cover" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               {galleryImages.slice(1, 5).map((image, index) => (
-                <div key={image.id} className="relative overflow-hidden rounded-[28px] border border-blue-100 bg-blue-50">
+                <div
+                  key={image.id}
+                  className="relative overflow-hidden rounded-[28px] border border-blue-100 bg-blue-50"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={image.url}
@@ -405,7 +407,11 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
                     <div className="relative overflow-hidden bg-blue-50">
                       {cover ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={cover} alt={roomType.name} className="aspect-[4/4.2] h-full w-full object-cover lg:aspect-auto" />
+                        <img
+                          src={cover}
+                          alt={roomType.name}
+                          className="aspect-[4/4.2] h-full w-full object-cover lg:aspect-auto"
+                        />
                       ) : (
                         <div className="flex h-full min-h-[280px] items-center justify-center text-blue-300">
                           <Building2 className="h-12 w-12" />
@@ -425,15 +431,21 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
                     <div className="p-5 sm:p-6 lg:p-7">
                       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="max-w-2xl">
-                          <h3 className="text-2xl font-black tracking-tight text-zinc-950 sm:text-3xl">{roomType.name}</h3>
+                          <h3 className="text-2xl font-black tracking-tight text-zinc-950 sm:text-3xl">
+                            {roomType.name}
+                          </h3>
                           <p className="mt-3 text-sm leading-7 text-zinc-500 sm:text-base">
                             {roomType.description || "Tipe kamar ini siap disewa dengan fasilitas yang sudah tersedia."}
                           </p>
                         </div>
 
                         <div className="min-w-[220px] rounded-[28px] bg-blue-50/80 p-5 lg:text-right">
-                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Mulai dari</div>
-                          <div className="mt-2 text-2xl font-black tracking-tight text-blue-700">{formatRupiah(lowestPrice)}</div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                            Mulai dari
+                          </div>
+                          <div className="mt-2 text-2xl font-black tracking-tight text-blue-700">
+                            {formatRupiah(lowestPrice)}
+                          </div>
                         </div>
                       </div>
 
@@ -443,7 +455,9 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
                             <Users className="h-3.5 w-3.5 text-blue-700" />
                             Penghuni
                           </div>
-                          <div className="mt-2 text-lg font-black text-zinc-950">{getGenderLabel(roomType.genderCategory)}</div>
+                          <div className="mt-2 text-lg font-black text-zinc-950">
+                            {getGenderLabel(roomType.genderCategory)}
+                          </div>
                         </div>
 
                         <div className="rounded-[24px] border border-blue-100 bg-white p-4">
@@ -496,7 +510,11 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
                                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-blue-700">
                                     {facility.iconUrl ? (
                                       // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={facility.iconUrl} alt={facility.name} className="h-5 w-5 object-contain" />
+                                      <img
+                                        src={facility.iconUrl}
+                                        alt={facility.name}
+                                        className="h-5 w-5 object-contain"
+                                      />
                                     ) : (
                                       <Icon className="h-4 w-4" />
                                     )}

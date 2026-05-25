@@ -1,21 +1,35 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bath, Bed, CalendarDays, CheckCircle2, Home, MapPin, Maximize, ShieldCheck, Users, AlertCircle } from "lucide-react";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Bath,
+  Bed,
+  CalendarDays,
+  CheckCircle2,
+  Home,
+  MapPin,
+  Maximize,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+
+import { ExpandableText } from "@/app/(external)/_components/expandable-text";
+import { RoomInventoryGrid } from "@/app/(main)/dashboard/rooms/_components/room-inventory-grid";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
-import { RoomInventoryGrid } from "@/app/(main)/dashboard/rooms/_components/room-inventory-grid";
-import { ExpandableText } from "@/app/(external)/_components/expandable-text";
 
 interface RoomImage {
   url: string;
@@ -85,7 +99,9 @@ export default function PublicRoomDetailClient({ roomId }: { roomId: string }) {
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
         <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground opacity-50" />
         <h3 className="mb-1 text-xl font-medium">Kamar tidak ditemukan</h3>
-        <p className="mb-4 max-w-sm text-muted-foreground">Tipe kamar yang Anda cari tidak ada atau sudah tidak tersedia untuk publik.</p>
+        <p className="mb-4 max-w-sm text-muted-foreground">
+          Tipe kamar yang Anda cari tidak ada atau sudah tidak tersedia untuk publik.
+        </p>
         <Link href="/">
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" /> Kembali ke Beranda
@@ -208,7 +224,11 @@ export default function PublicRoomDetailClient({ roomId }: { roomId: string }) {
                     <div>
                       <p className="text-sm font-medium">Tipe Penghuni</p>
                       <p className="text-sm text-muted-foreground">
-                        {room.genderCategory === "MAN" ? "Pria" : room.genderCategory === "WOMAN" ? "Wanita" : "Pria & Wanita"}
+                        {room.genderCategory === "MAN"
+                          ? "Pria"
+                          : room.genderCategory === "WOMAN"
+                            ? "Wanita"
+                            : "Pria & Wanita"}
                       </p>
                     </div>
                   </div>
@@ -251,11 +271,16 @@ export default function PublicRoomDetailClient({ roomId }: { roomId: string }) {
                 <div className="space-y-3">
                   {room.rules?.length > 0 ? (
                     room.rules.map((rule: Rule, idx: number) => (
-                      <div key={idx} className="flex gap-2 rounded-md border-l-4 border-l-orange-500 bg-muted/50 p-3 text-sm">
+                      <div
+                        key={idx}
+                        className="flex gap-2 rounded-md border-l-4 border-l-orange-500 bg-muted/50 p-3 text-sm"
+                      >
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
                         <div>
                           <span className="font-medium">{rule.name}</span>
-                          {rule.description ? <p className="mt-0.5 text-xs text-muted-foreground">{rule.description}</p> : null}
+                          {rule.description ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">{rule.description}</p>
+                          ) : null}
                         </div>
                       </div>
                     ))
@@ -321,25 +346,37 @@ export default function PublicRoomDetailClient({ roomId }: { roomId: string }) {
                 {room.isWeekly && room.weeklyPrice ? (
                   <div className="flex items-center justify-between border-b border-dashed pb-3">
                     <span className="text-muted-foreground">Mingguan</span>
-                    <span className="text-right font-semibold">{formatRupiah(room.weeklyPrice)} <span className="text-xs font-normal text-muted-foreground">/minggu</span></span>
+                    <span className="text-right font-semibold">
+                      {formatRupiah(room.weeklyPrice)}{" "}
+                      <span className="text-xs font-normal text-muted-foreground">/minggu</span>
+                    </span>
                   </div>
                 ) : null}
                 {room.isMonthly && room.monthlyPrice ? (
                   <div className="flex items-center justify-between border-b border-dashed pb-3">
                     <span className="font-medium text-primary">Bulanan</span>
-                    <span className="text-right font-bold text-primary">{formatRupiah(room.monthlyPrice)} <span className="text-xs font-normal text-primary/70">/bulan</span></span>
+                    <span className="text-right font-bold text-primary">
+                      {formatRupiah(room.monthlyPrice)}{" "}
+                      <span className="text-xs font-normal text-primary/70">/bulan</span>
+                    </span>
                   </div>
                 ) : null}
                 {room.is3Monthly && room.price3Monthly ? (
                   <div className="flex items-center justify-between border-b border-dashed pb-3">
                     <span className="text-muted-foreground">3 Bulanan</span>
-                    <span className="text-right font-semibold">{formatRupiah(room.price3Monthly)} <span className="text-xs font-normal text-muted-foreground">/3 bln</span></span>
+                    <span className="text-right font-semibold">
+                      {formatRupiah(room.price3Monthly)}{" "}
+                      <span className="text-xs font-normal text-muted-foreground">/3 bln</span>
+                    </span>
                   </div>
                 ) : null}
                 {room.isYearly && room.yearlyPrice ? (
                   <div className="flex items-center justify-between border-b border-dashed pb-3">
                     <span className="text-muted-foreground">Tahunan</span>
-                    <span className="text-right font-semibold">{formatRupiah(room.yearlyPrice)} <span className="text-xs font-normal text-muted-foreground">/tahun</span></span>
+                    <span className="text-right font-semibold">
+                      {formatRupiah(room.yearlyPrice)}{" "}
+                      <span className="text-xs font-normal text-muted-foreground">/tahun</span>
+                    </span>
                   </div>
                 ) : null}
 

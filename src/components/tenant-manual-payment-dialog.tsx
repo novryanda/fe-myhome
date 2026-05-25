@@ -156,7 +156,9 @@ export function TenantManualPaymentDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Upload Bukti Pembayaran</DialogTitle>
-          <DialogDescription>Upload bukti transfer manual agar admin bisa memverifikasi pembayaran Anda.</DialogDescription>
+          <DialogDescription>
+            Upload bukti transfer manual agar admin bisa memverifikasi pembayaran Anda.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -290,7 +292,11 @@ export function TenantManualPaymentDialog({
             </div>
           </div>
 
-          {amountWarning ? <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{amountWarning}</div> : null}
+          {amountWarning ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              {amountWarning}
+            </div>
+          ) : null}
         </div>
 
         <DialogFooter>

@@ -5,7 +5,14 @@ import * as React from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -58,9 +65,12 @@ export function ChartAreaInteractive({
   return (
     <Card className="@container/card rounded-2xl">
       <CardHeader>
-        <CardTitle>{role === "SUPERADMIN" ? "Aktivitas Pengguna & Transaksi" : "Aktivitas Tenant & Transaksi"}</CardTitle>
+        <CardTitle>
+          {role === "SUPERADMIN" ? "Aktivitas Pengguna & Transaksi" : "Aktivitas Tenant & Transaksi"}
+        </CardTitle>
         <CardDescription>
-          {totalUsers} pengguna, {totalTransactions} transaksi terbayar, dan {totalFailedTransactions} transaksi gagal pada rentang yang dipilih.
+          {totalUsers} pengguna, {totalTransactions} transaksi terbayar, dan {totalFailedTransactions} transaksi gagal
+          pada rentang yang dipilih.
         </CardDescription>
         <CardAction>
           <ToggleGroup
@@ -153,7 +163,13 @@ export function ChartAreaInteractive({
               stroke="var(--color-failedTransactions)"
               strokeWidth={2}
             />
-            <Area dataKey="transactions" type="monotone" fill="url(#fillTransactions)" stroke="var(--color-transactions)" strokeWidth={2} />
+            <Area
+              dataKey="transactions"
+              type="monotone"
+              fill="url(#fillTransactions)"
+              stroke="var(--color-transactions)"
+              strokeWidth={2}
+            />
             <Area dataKey="users" type="monotone" fill="url(#fillUsers)" stroke="var(--color-users)" strokeWidth={2} />
           </AreaChart>
         </ChartContainer>

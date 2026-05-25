@@ -1,34 +1,29 @@
 "use client";
 
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
   Bed,
   Building,
   Eye,
+  History,
   LayoutGrid,
   PlusCircle,
   RefreshCcw,
   Search,
   SlidersHorizontal,
-  UserRound,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
-import { AdminManualPaymentDialog } from "@/components/admin-manual-payment-dialog";
+import { EntityCard } from "@/components/entity-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { EntityCard } from "@/components/entity-card";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
@@ -38,14 +33,14 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { PageHero } from "../../_components/page-hero";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useSession } from "@/lib/auth-client";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
+
+import { PageHero } from "../../_components/page-hero";
 
 type RoomStatus = "AVAILABLE" | "RESERVED" | "BOOKED" | "OCCUPIED" | "MAINTENANCE";
 
@@ -68,33 +63,6 @@ type RoomDetail = {
   } | null;
 };
 
-type PaymentHistoryRow = {
-  id: string;
-  bookingId: string;
-  bookingCode: string;
-  roomId?: string | null;
-  roomTypeId?: string | null;
-  tenantName: string;
-  propertyId?: string | null;
-  propertyName?: string | null;
-  roomTypeName?: string | null;
-  roomNumber?: string | null;
-  amount: number;
-  status: string;
-  category: string;
-  paymentType?: string | null;
-  paidAt?: string | Date | null;
-  expiredAt?: string | Date | null;
-  createdAt?: string | Date | null;
-  latestManualProof?: {
-    id: string;
-    status: "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
-    transferAmount: number;
-    adminNote?: string | null;
-    createdAt: string;
-  } | null;
-};
-
 const statusLabelMap: Record<RoomStatus, string> = {
   AVAILABLE: "Tersedia",
   RESERVED: "Dipesan",
@@ -111,17 +79,7 @@ const statusVariantMap: Record<RoomStatus, "success" | "warning" | "destructive"
   MAINTENANCE: "secondary",
 };
 
-const dateLabel = (value?: string | Date | null) =>
-  value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
-
-const currency = (value: number) =>
-  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
-
-const renderPagination = (
-  currentPage: number,
-  totalPages: number,
-  onPageChange: (page: number) => void,
-) => {
+const renderPagination = (currentPage: number, totalPages: number, onPageChange: (page: number) => void) => {
   if (totalPages <= 1) {
     return null;
   }
@@ -144,11 +102,7 @@ const renderPagination = (
 
         {[...Array(totalPages)].map((_, index) => {
           const page = index + 1;
-          if (
-            page === 1 ||
-            page === totalPages ||
-            (page >= currentPage - 1 && page <= currentPage + 1)
-          ) {
+          if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
             return (
               <PaginationItem key={page}>
                 <PaginationLink
@@ -165,10 +119,7 @@ const renderPagination = (
             );
           }
 
-          if (
-            (page === 2 && currentPage > 3) ||
-            (page === totalPages - 1 && currentPage < totalPages - 2)
-          ) {
+          if ((page === 2 && currentPage > 3) || (page === totalPages - 1 && currentPage < totalPages - 2)) {
             return (
               <PaginationItem key={page}>
                 <span className="px-2">...</span>
@@ -198,7 +149,6 @@ const renderPagination = (
 
 export default function RoomListClient() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const [activePropertyId, setActivePropertyId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"room-types" | "all-rooms">("room-types");
@@ -208,10 +158,6 @@ export default function RoomListClient() {
   const [roomPage, setRoomPage] = useState(1);
   const [roomStatusFilter, setRoomStatusFilter] = useState<RoomStatus | "ALL">("ALL");
   const [roomSortOrder, setRoomSortOrder] = useState<"asc" | "desc">("asc");
-  const [selectedRoom, setSelectedRoom] = useState<RoomDetail | null>(null);
-  const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentHistoryRow | null>(null);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyPageSize, setHistoryPageSize] = useState(10);
   const limit = 15;
 
   useEffect(() => {
@@ -266,14 +212,7 @@ export default function RoomListClient() {
   });
 
   const allRoomsQuery = useQuery({
-    queryKey: [
-      "all-rooms-table",
-      activePropertyId,
-      roomPage,
-      debouncedSearch,
-      roomStatusFilter,
-      roomSortOrder,
-    ],
+    queryKey: ["all-rooms-table", activePropertyId, roomPage, debouncedSearch, roomStatusFilter, roomSortOrder],
     queryFn: async () => {
       if (!activePropertyId) return null;
       const response = await api.get(`/api/room-types/property/${activePropertyId}/rooms`, {
@@ -295,32 +234,6 @@ export default function RoomListClient() {
   const roomTypesMeta = roomTypesQuery.data?.meta || { totalItems: 0, totalPages: 0, currentPage: 1 };
   const allRooms = (allRoomsQuery.data?.data || []) as RoomDetail[];
   const allRoomsMeta = allRoomsQuery.data?.meta || { totalItems: 0, totalPages: 0, currentPage: 1 };
-
-  const roomPaymentHistoryQuery = useQuery({
-    queryKey: ["room-payment-history-inline", selectedRoom?.id, historyPage, historyPageSize],
-    queryFn: async () => {
-      const response = await api.get("/api/payments", {
-        params: {
-          roomId: selectedRoom?.id,
-          page: historyPage,
-          size: historyPageSize,
-        },
-      });
-      return response.data;
-    },
-    enabled: !!selectedRoom?.id,
-    placeholderData: keepPreviousData,
-  });
-
-  const roomPaymentHistory = (roomPaymentHistoryQuery.data?.data || []) as PaymentHistoryRow[];
-  const roomPaymentHistoryPaging = roomPaymentHistoryQuery.data?.paging;
-
-  useEffect(() => {
-    if (selectedRoom) {
-      setHistoryPage(1);
-      setHistoryPageSize(10);
-    }
-  }, [selectedRoom]);
 
   return (
     <>
@@ -347,7 +260,11 @@ export default function RoomListClient() {
               <Button
                 disabled={!activePropertyId || (activePropertyId !== "all" && activeProperty?.status !== "APPROVED")}
                 onClick={() => router.push("/dashboard/rooms/add")}
-                title={activePropertyId !== "all" && activeProperty?.status !== "APPROVED" ? "Properti harus disetujui terlebih dahulu" : "Tambah Ruangan"}
+                title={
+                  activePropertyId !== "all" && activeProperty?.status !== "APPROVED"
+                    ? "Properti harus disetujui terlebih dahulu"
+                    : "Tambah Ruangan"
+                }
               >
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Tambah Kamar
@@ -397,7 +314,9 @@ export default function RoomListClient() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
             <Input
               type="search"
-              placeholder={activeTab === "room-types" ? "Cari tipe kamar..." : "Cari nomor kamar, tipe, atau penghuni..."}
+              placeholder={
+                activeTab === "room-types" ? "Cari tipe kamar..." : "Cari nomor kamar, tipe, atau penghuni..."
+              }
               className="h-10 rounded-xl border-border/50 bg-card/50 pl-10 backdrop-blur-sm transition-all hover:border-primary/30"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -426,7 +345,11 @@ export default function RoomListClient() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "room-types" | "all-rooms")} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "room-types" | "all-rooms")}
+        className="space-y-6"
+      >
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="all-rooms">Semua Kamar</TabsTrigger>
           <TabsTrigger value="room-types">Jenis Kamar</TabsTrigger>
@@ -471,11 +394,12 @@ export default function RoomListClient() {
               </p>
             </div>
           ) : (
-            <div className={`space-y-3 transition-opacity duration-300 ${roomTypesQuery.isRefetching ? "opacity-50" : "opacity-100"}`}>
+            <div
+              className={`space-y-3 transition-opacity duration-300 ${roomTypesQuery.isRefetching ? "opacity-50" : "opacity-100"}`}
+            >
               {roomTypes.map((roomType: any) => {
                 const thumbnail =
-                  roomType.images?.find((image: any) => image.category === "BEDROOM")?.url ||
-                  roomType.images?.[0]?.url;
+                  roomType.images?.find((image: any) => image.category === "BEDROOM")?.url || roomType.images?.[0]?.url;
 
                 return (
                   <EntityCard
@@ -584,10 +508,12 @@ export default function RoomListClient() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button size="sm" variant="outline" onClick={() => setSelectedRoom(room)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Detail
-                            </Button>
+                            <Link href={`/dashboard/rooms/unit/${room.id}`}>
+                              <Button size="sm" variant="outline">
+                                <Eye className="mr-2 h-4 w-4" />
+                                Detail
+                              </Button>
+                            </Link>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -608,266 +534,6 @@ export default function RoomListClient() {
           )}
         </TabsContent>
       </Tabs>
-
-      <Dialog
-        open={!!selectedRoom}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedRoom(null);
-            setSelectedManualPayment(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[88vh] overflow-hidden p-0 sm:max-w-[960px]">
-          <DialogHeader className="border-b px-6 py-5">
-            <DialogTitle>Detail Kamar {selectedRoom?.roomNumber}</DialogTitle>
-            <DialogDescription>
-              Lihat status kamar, informasi penghuni aktif, dan histori pembayaran langsung di modal ini.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRoom ? (
-            <ScrollArea className="max-h-[calc(88vh-88px)]">
-              <div className="space-y-5 px-6 py-5">
-                <div className="rounded-xl border bg-muted/20 p-5">
-                  <div className="mb-4 font-semibold text-sm">Ringkasan Kamar</div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-lg bg-background px-4 py-3">
-                      <div className="text-muted-foreground text-xs uppercase tracking-wide">Nomor Kamar</div>
-                      <div className="mt-1 font-semibold text-base">{selectedRoom.roomNumber}</div>
-                    </div>
-                    <div className="rounded-lg bg-background px-4 py-3">
-                      <div className="text-muted-foreground text-xs uppercase tracking-wide">Status</div>
-                      <div className="mt-2">
-                        <Badge variant={statusVariantMap[selectedRoom.status]}>{statusLabelMap[selectedRoom.status]}</Badge>
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-background px-4 py-3">
-                      <div className="text-muted-foreground text-xs uppercase tracking-wide">Tipe Kamar</div>
-                      <div className="mt-1 font-medium">{selectedRoom.roomTypeName}</div>
-                    </div>
-                    <div className="rounded-lg bg-background px-4 py-3">
-                      <div className="text-muted-foreground text-xs uppercase tracking-wide">Properti</div>
-                      <div className="mt-1 font-medium">{selectedRoom.propertyName}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border p-5">
-                  <div className="mb-4 font-semibold text-sm">Informasi Penghuni</div>
-                  {selectedRoom.currentBooking ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 font-semibold text-base">
-                        <UserRound className="h-4 w-4 text-primary" />
-                        {selectedRoom.currentBooking.tenantName}
-                      </div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-lg bg-muted/20 px-4 py-3 md:col-span-2">
-                          <div className="text-muted-foreground text-xs uppercase tracking-wide">Email</div>
-                          <div className="mt-1 break-all font-medium">{selectedRoom.currentBooking.tenantEmail}</div>
-                        </div>
-                        <div className="rounded-lg bg-muted/20 px-4 py-3">
-                          <div className="text-muted-foreground text-xs uppercase tracking-wide">No. Telepon</div>
-                          <div className="mt-1 font-medium">{selectedRoom.currentBooking.tenantPhone || "-"}</div>
-                        </div>
-                        <div className="rounded-lg bg-muted/20 px-4 py-3">
-                          <div className="text-muted-foreground text-xs uppercase tracking-wide">Check-in</div>
-                          <div className="mt-1 font-medium">{dateLabel(selectedRoom.currentBooking.checkInAt)}</div>
-                        </div>
-                        <div className="rounded-lg bg-muted/20 px-4 py-3">
-                          <div className="text-muted-foreground text-xs uppercase tracking-wide">Kode Booking</div>
-                          <div className="mt-1 font-medium break-all">{selectedRoom.currentBooking.bookingCode}</div>
-                        </div>
-                        <div className="rounded-lg bg-muted/20 px-4 py-3">
-                          <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                            Jatuh Tempo Berikutnya
-                          </div>
-                          <div className="mt-1 font-medium">{dateLabel(selectedRoom.currentBooking.nextDueDate)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
-                      Saat ini belum ada penghuni aktif pada kamar ini.
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-xl border">
-                  <div className="flex flex-col gap-3 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="font-semibold">Riwayat Pembayaran</div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        Histori pembayaran unit kamar ini lintas tenant, termasuk booking awal dan perpanjangan.
-                      </div>
-                    </div>
-                    <Button
-                      className="w-full sm:w-auto lg:shrink-0"
-                      variant="outline"
-                      onClick={() => roomPaymentHistoryQuery.refetch()}
-                      disabled={roomPaymentHistoryQuery.isFetching}
-                    >
-                      <RefreshCcw className="mr-2 h-4 w-4" />
-                      Muat Ulang
-                    </Button>
-                  </div>
-
-                  <div className="space-y-4 px-5 py-4">
-                    <div className="overflow-x-auto rounded-lg border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Booking</TableHead>
-                            <TableHead>Tenant</TableHead>
-                            <TableHead>Kategori</TableHead>
-                            <TableHead>Metode</TableHead>
-                            <TableHead>Nominal</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Dibuat</TableHead>
-                            <TableHead>Paid / Expired</TableHead>
-                            <TableHead className="text-right">Aksi</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {roomPaymentHistoryQuery.isLoading ? (
-                            <TableRow>
-                              <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                                Memuat histori pembayaran...
-                              </TableCell>
-                            </TableRow>
-                          ) : roomPaymentHistory.length ? (
-                            roomPaymentHistory.map((payment) => (
-                              <TableRow key={payment.id}>
-                                <TableCell className="min-w-[190px] align-top">
-                                  <div className="font-medium">{payment.bookingCode}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {payment.roomNumber || selectedRoom.roomNumber}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="min-w-[120px] align-top">{payment.tenantName}</TableCell>
-                                <TableCell className="align-top">
-                                  <Badge variant="secondary">{payment.category}</Badge>
-                                </TableCell>
-                                <TableCell className="min-w-[170px] align-top">{payment.paymentType || "-"}</TableCell>
-                                <TableCell className="min-w-[130px] align-top">{currency(payment.amount)}</TableCell>
-                                <TableCell className="min-w-[150px] align-top">
-                                  <Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge>
-                                  {payment.latestManualProof ? (
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                      Proof: {payment.latestManualProof.status}
-                                    </div>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell className="min-w-[120px] align-top">{dateLabel(payment.createdAt)}</TableCell>
-                                <TableCell className="min-w-[140px] align-top">
-                                  <div>{dateLabel(payment.paidAt)}</div>
-                                  <div className="text-xs text-muted-foreground">{dateLabel(payment.expiredAt)}</div>
-                                </TableCell>
-                                <TableCell className="min-w-[160px] text-right align-top">
-                                  {payment.status === "PENDING" ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setSelectedManualPayment(payment)}
-                                    >
-                                      Tandai Bayar Manual
-                                    </Button>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">-</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          ) : (
-                            <TableRow>
-                              <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                                Belum ada histori pembayaran untuk kamar ini.
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="text-sm text-muted-foreground">
-                        Total {roomPaymentHistoryPaging?.total_items || 0} transaksi, halaman{" "}
-                        {roomPaymentHistoryPaging?.current_page || historyPage} dari{" "}
-                        {roomPaymentHistoryPaging?.total_page || 1}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <Select
-                          value={String(historyPageSize)}
-                          onValueChange={(value) => {
-                            setHistoryPageSize(Number(value));
-                            setHistoryPage(1);
-                          }}
-                        >
-                          <SelectTrigger className="w-[120px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[5, 10, 20, 50].map((size) => (
-                              <SelectItem key={size} value={String(size)}>
-                                {size} / halaman
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          variant="outline"
-                          onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
-                          disabled={historyPage <= 1}
-                        >
-                          Sebelumnya
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setHistoryPage((current) => current + 1)}
-                          disabled={historyPage >= (roomPaymentHistoryPaging?.total_page || 1)}
-                        >
-                          Berikutnya
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <AdminManualPaymentDialog
-        open={!!selectedManualPayment}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedManualPayment(null);
-          }
-        }}
-        submitUrl={selectedManualPayment ? `/api/payments/${selectedManualPayment.id}/manual-paid` : ""}
-        tenantName={selectedManualPayment?.tenantName || "-"}
-        bookingCode={selectedManualPayment?.bookingCode || "-"}
-        propertyId={selectedManualPayment?.propertyId || selectedRoom?.propertyId}
-        propertyName={selectedManualPayment?.propertyName || selectedRoom?.propertyName}
-        roomLabel={
-          selectedManualPayment
-            ? `${selectedManualPayment.roomTypeName || selectedRoom?.roomTypeName || "-"} / Unit ${selectedManualPayment.roomNumber || selectedRoom?.roomNumber || "-"}`
-            : "-"
-        }
-        periodLabel={selectedManualPayment?.category || "-"}
-        amount={selectedManualPayment?.amount || 0}
-        onSuccess={() => {
-          setSelectedManualPayment(null);
-          queryClient.invalidateQueries({ queryKey: ["dashboard-payments"] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-payments-stats"] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
-          queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
-          queryClient.invalidateQueries({ queryKey: ["tenants"] });
-          queryClient.invalidateQueries({ queryKey: ["manual-payment-proofs"] });
-          queryClient.invalidateQueries({ queryKey: ["room-payment-history-inline", selectedRoom?.id] });
-        }}
-      />
     </>
   );
 }

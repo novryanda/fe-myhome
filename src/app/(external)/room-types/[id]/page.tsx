@@ -1,12 +1,8 @@
-import PublicRoomDetailClient from "./_components/public-room-detail-client";
 import { PublicFooter } from "../../_components/public-footer";
 import { PublicHeader } from "../../_components/public-header";
+import PublicRoomDetailClient from "./_components/public-room-detail-client";
 
-export default async function RoomTypeDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RoomTypeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   return (

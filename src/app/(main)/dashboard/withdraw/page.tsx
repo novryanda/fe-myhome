@@ -2,10 +2,15 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+
 import { Landmark, Loader2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
-import { useSession } from "@/lib/auth-client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useBankAccount,
   useCreateWithdrawal,
@@ -13,11 +18,8 @@ import {
   useUpdateBankAccount,
   useWithdrawals,
 } from "@/hooks/use-finance";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useSession } from "@/lib/auth-client";
+
 import { PageHero } from "../_components/page-hero";
 
 const currency = (value?: number) =>
@@ -44,10 +46,7 @@ export default function WithdrawPage() {
   const availableBalance = summary?.availableBalance || 0;
   const hasBankAccount = Boolean(bankName && accountNumber && accountHolder);
   const canSubmitWithdrawal =
-    hasBankAccount &&
-    numericAmount >= 10000 &&
-    numericAmount <= availableBalance &&
-    !createWithdrawal.isPending;
+    hasBankAccount && numericAmount >= 10000 && numericAmount <= availableBalance && !createWithdrawal.isPending;
 
   useEffect(() => {
     if (bankAccountQuery.data) {
@@ -106,17 +105,27 @@ export default function WithdrawPage() {
               <Landmark className="h-5 w-5" />
               Rekening Pencairan
             </CardTitle>
-            <CardDescription>Simpan rekening tujuan terlebih dahulu sebelum membuat pengajuan withdraw.</CardDescription>
+            <CardDescription>
+              Simpan rekening tujuan terlebih dahulu sebelum membuat pengajuan withdraw.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <Field label="Nama Bank">
               <Input value={bankName} onChange={(event) => setBankName(event.target.value)} placeholder="Contoh: BCA" />
             </Field>
             <Field label="Nomor Rekening">
-              <Input value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} placeholder="1234567890" />
+              <Input
+                value={accountNumber}
+                onChange={(event) => setAccountNumber(event.target.value)}
+                placeholder="1234567890"
+              />
             </Field>
             <Field label="Nama Pemilik Rekening">
-              <Input value={accountHolder} onChange={(event) => setAccountHolder(event.target.value)} placeholder="Nama pemilik rekening" />
+              <Input
+                value={accountHolder}
+                onChange={(event) => setAccountHolder(event.target.value)}
+                placeholder="Nama pemilik rekening"
+              />
             </Field>
             <Button
               className="w-full"
@@ -140,7 +149,9 @@ export default function WithdrawPage() {
         <Card className="overflow-hidden">
           <CardHeader className="border-b bg-muted/40">
             <CardTitle>Ajukan Penarikan</CardTitle>
-            <CardDescription>Minimal Rp10.000. Nominal akan dipotong dari saldo tersedia saat request dibuat.</CardDescription>
+            <CardDescription>
+              Minimal Rp10.000. Nominal akan dipotong dari saldo tersedia saat request dibuat.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
             <div className="rounded-xl border border-dashed bg-muted/30 p-4">
@@ -165,7 +176,7 @@ export default function WithdrawPage() {
                   Nominal diajukan: <span className="font-semibold text-foreground">{currency(numericAmount)}</span>
                 </span>
               ) : (
-                <span>Masukkan nominal penarikan  </span>
+                <span>Masukkan nominal penarikan </span>
               )}
               {numericAmount > availableBalance ? (
                 <div className="mt-1 text-destructive">Nominal melebihi saldo tersedia.</div>
@@ -200,7 +211,9 @@ export default function WithdrawPage() {
       <Card>
         <CardHeader>
           <CardTitle>Riwayat Pengajuan</CardTitle>
-          <CardDescription>Lacak status pencairan, catatan approval, dan bukti transfer dari superadmin.</CardDescription>
+          <CardDescription>
+            Lacak status pencairan, catatan approval, dan bukti transfer dari superadmin.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -224,7 +237,11 @@ export default function WithdrawPage() {
                     <div className="text-xs text-muted-foreground">{item.accountNumber}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={item.status === "SUCCESS" ? "default" : item.status === "REJECTED" ? "destructive" : "secondary"}>
+                    <Badge
+                      variant={
+                        item.status === "SUCCESS" ? "default" : item.status === "REJECTED" ? "destructive" : "secondary"
+                      }
+                    >
                       {item.status}
                     </Badge>
                   </TableCell>
@@ -233,7 +250,12 @@ export default function WithdrawPage() {
                   </TableCell>
                   <TableCell>
                     {item.receiptUrl ? (
-                      <a href={item.receiptUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                      <a
+                        href={item.receiptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                      >
                         Lihat Bukti
                       </a>
                     ) : (
@@ -250,15 +272,7 @@ export default function WithdrawPage() {
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  icon: typeof Wallet;
-}) {
+function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof Wallet }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

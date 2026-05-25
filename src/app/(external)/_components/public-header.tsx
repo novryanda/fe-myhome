@@ -3,10 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LayoutDashboard, LogOut, MapPin, MenuSquare, ReceiptText, Settings, UserRound } from "lucide-react";
 
-import { authClient, useSession } from "@/lib/auth-client";
-import { getInitials } from "@/lib/utils";
+import {
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  MenuSquare,
+  ReceiptText,
+  Settings,
+  UserRound,
+} from "lucide-react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +26,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { authClient, useSession } from "@/lib/auth-client";
+import { getInitials } from "@/lib/utils";
 
 const publicNavItems = [
   { label: "Beranda", href: "/" },
@@ -41,21 +51,13 @@ export function PublicHeader() {
         { label: "Profil", href: "/profile" },
         { label: "Dashboard", href: "/dashboard" },
       ]
-    : [
-      ];
+    : [];
 
   return (
     <header className="sticky top-0 z-30 border-b border-blue-100/80 bg-white/92 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" className="min-w-0 shrink-0">
-          <Image
-            src="/logo.png"
-            alt="MyHome"
-            width={220}
-            height={66}
-            priority
-            className="h-10 w-auto sm:h-12"
-          />
+          <Image src="/logo.png" alt="MyHome" width={220} height={66} priority className="h-10 w-auto sm:h-12" />
         </Link>
 
         <nav className="hidden items-center gap-2 md:flex">
@@ -93,11 +95,17 @@ export function PublicHeader() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-11 rounded-full px-2 hover:bg-blue-50">
                     <Avatar className="h-8 w-8 border border-blue-100" size="sm">
-                      <AvatarImage src={(session.user as any).image || undefined} alt={session.user.name} className="object-cover" />
+                      <AvatarImage
+                        src={(session.user as any).image || undefined}
+                        alt={session.user.name}
+                        className="object-cover"
+                      />
                       <AvatarFallback>{getInitials(session.user.name || "U")}</AvatarFallback>
                     </Avatar>
                     <div className="hidden text-left sm:block">
-                      <div className="max-w-[120px] truncate text-sm font-semibold text-zinc-800">{session.user.name}</div>
+                      <div className="max-w-[120px] truncate text-sm font-semibold text-zinc-800">
+                        {session.user.name}
+                      </div>
                       <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{role}</div>
                     </div>
                     <ChevronDown className="h-4 w-4 text-zinc-500" />
@@ -153,9 +161,7 @@ export function PublicHeader() {
           ) : (
             <>
               <Link href={loginHref}>
-                <Button className="rounded-full bg-blue-700 hover:bg-blue-800">
-                  Masuk
-                </Button>
+                <Button className="rounded-full bg-blue-700 hover:bg-blue-800">Masuk</Button>
               </Link>
               <Link href={registerHref}>
                 <Button className="rounded-full bg-blue-700 hover:bg-blue-800">Daftar</Button>

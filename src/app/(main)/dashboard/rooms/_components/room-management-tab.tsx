@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import Link from "next/link";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Edit2, History, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -23,8 +25,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
-
-import { RoomPaymentHistoryDialog } from "./room-payment-history-dialog";
 
 type RoomStatus = "AVAILABLE" | "RESERVED" | "BOOKED" | "OCCUPIED" | "MAINTENANCE";
 
@@ -84,7 +84,13 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
 
-export function RoomManagementTab({ roomTypeId, roomTypeName, propertyId, rooms, pricingOptions }: RoomManagementTabProps) {
+export function RoomManagementTab({
+  roomTypeId,
+  roomTypeName: _roomTypeName,
+  propertyId: _propertyId,
+  rooms,
+  pricingOptions,
+}: RoomManagementTabProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ roomNumber: string; status: RoomStatus }>({
@@ -95,7 +101,7 @@ export function RoomManagementTab({ roomTypeId, roomTypeName, propertyId, rooms,
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null);
   const [assignRoom, setAssignRoom] = useState<Room | null>(null);
-  const [historyRoom, setHistoryRoom] = useState<Room | null>(null);
+
   const [assignForm, setAssignForm] = useState({
     tenantFullName: "",
     tenantEmail: "",
@@ -473,9 +479,11 @@ export function RoomManagementTab({ roomTypeId, roomTypeName, propertyId, rooms,
                         Isi Kamar
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setHistoryRoom(room)}>
-                      <History className="mr-2 h-4 w-4" />
-                      Riwayat Pembayaran
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/dashboard/rooms/unit/${room.id}`}>
+                        <History className="mr-2 h-4 w-4" />
+                        Riwayat Pembayaran
+                      </Link>
                     </Button>
                     {editingId === room.id ? (
                       <>
@@ -543,18 +551,6 @@ export function RoomManagementTab({ roomTypeId, roomTypeName, propertyId, rooms,
           </TableBody>
         </Table>
       </div>
-
-      <RoomPaymentHistoryDialog
-        open={!!historyRoom}
-        onOpenChange={(open) => {
-          if (!open) {
-            setHistoryRoom(null);
-          }
-        }}
-        room={historyRoom}
-        roomTypeName={roomTypeName}
-        propertyId={propertyId}
-      />
     </div>
   );
 }

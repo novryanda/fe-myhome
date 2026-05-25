@@ -1,7 +1,8 @@
 "use client";
 
-import { CircleUser, CreditCard, EllipsisVertical, LogOut, MessageSquareDot } from "lucide-react";
 import Link from "next/link";
+
+import { CircleUser, CreditCard, EllipsisVertical, LogOut, MessageSquareDot } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,8 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { getInitials } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { getInitials } from "@/lib/utils";
 
 export function NavUser({
   user,
@@ -76,15 +77,18 @@ export function NavUser({
               </Link>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={async () => {
-              await authClient.signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    window.location.href = "/auth/login";
-                  }
-                }
-              });
-            }} className="cursor-pointer text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              onClick={async () => {
+                await authClient.signOut({
+                  fetchOptions: {
+                    onSuccess: () => {
+                      window.location.href = "/auth/login";
+                    },
+                  },
+                });
+              }}
+              className="cursor-pointer text-destructive focus:text-destructive"
+            >
               <LogOut />
               Keluar
             </DropdownMenuItem>

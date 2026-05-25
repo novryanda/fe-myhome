@@ -44,7 +44,7 @@ export default async function PublicProfilePage() {
         </section>
 
         <div className="mt-8">
-        <PublicProfileSettingsClient />
+          <PublicProfileSettingsClient />
         </div>
       </main>
       <PublicFooter />

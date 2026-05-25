@@ -1,4 +1,5 @@
 import Image from "next/image";
+
 import { Badge } from "@/components/ui/badge";
 
 interface CityHeroProps {
@@ -11,13 +12,7 @@ export function CityHero({ name, photoUrl, propertyCount }: CityHeroProps) {
   return (
     <div className="relative w-full h-80 rounded-2xl overflow-hidden shadow-lg mb-8">
       {photoUrl ? (
-        <Image
-          src={photoUrl}
-          alt={name}
-          fill
-          className="object-cover"
-          priority
-        />
+        <Image src={photoUrl} alt={name} fill className="object-cover" priority />
       ) : (
         <div className="w-full h-full bg-gray-200 flex items-center justify-center text-2xl text-gray-500">
           Tidak ada foto kota

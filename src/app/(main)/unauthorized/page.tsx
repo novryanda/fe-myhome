@@ -9,7 +9,8 @@ export default function page() {
         <Lock className="mx-auto size-12 text-primary" />
         <h1 className="mt-4 font-bold text-3xl tracking-tight sm:text-4xl">Akses Ditolak</h1>
         <p className="mt-4 text-muted-foreground">
-          Anda tidak memiliki izin untuk mengakses halaman ini. Silakan kembali ke beranda atau hubungi administrator jika Anda yakin ini adalah kesalahan. 
+          Anda tidak memiliki izin untuk mengakses halaman ini. Silakan kembali ke beranda atau hubungi administrator
+          jika Anda yakin ini adalah kesalahan.
         </p>
         <div className="mt-6">
           <Link

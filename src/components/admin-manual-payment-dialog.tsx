@@ -237,7 +237,13 @@ export function AdminManualPaymentDialog({
                     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="font-medium">{selectedAccount.label}</div>
-                        <Button type="button" variant="outline" size="sm" onClick={handleCopyAccountNumber} disabled={isSubmitting}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopyAccountNumber}
+                          disabled={isSubmitting}
+                        >
                           <Copy className="mr-2 h-4 w-4" />
                           Salin Nomor
                         </Button>
@@ -318,7 +324,11 @@ export function AdminManualPaymentDialog({
             </div>
           </div>
 
-          {amountWarning ? <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{amountWarning}</div> : null}
+          {amountWarning ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              {amountWarning}
+            </div>
+          ) : null}
 
           <div className="text-muted-foreground text-sm">
             Pembayaran manual tidak menambah saldo withdrawable sistem karena uang diterima langsung oleh admin.

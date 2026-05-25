@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect as nextRedirect } from "next/navigation";
 
 import { Command } from "lucide-react";
@@ -10,11 +10,7 @@ import { getPostAuthPath } from "@/lib/auth-landing";
 import { LoginForm } from "../_components/login-form";
 import { GoogleButton } from "../_components/social-auth/google-button";
 
-export default async function LoginV1({
-  searchParams,
-}: {
-  searchParams: Promise<{ redirect?: string }>;
-}) {
+export default async function LoginV1({ searchParams }: { searchParams: Promise<{ redirect?: string }> }) {
   const { redirect } = await searchParams;
   const { data: session } = await authClient.getSession({
     fetchOptions: {

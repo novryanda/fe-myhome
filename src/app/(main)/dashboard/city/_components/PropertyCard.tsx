@@ -1,5 +1,7 @@
 import Image from "next/image";
+
 import { MapPin } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 
 interface PropertyCardProps {
@@ -31,7 +33,9 @@ export function PropertyCard({ id, name, address, description, imageUrl, onManag
         </div>
         <p className="text-sm text-gray-700 line-clamp-2 min-h-[2.5em]">{description || "-"}</p>
         <div className="flex justify-end mt-2">
-          <Button size="sm" onClick={onManage} className="rounded-full">Kelola</Button>
+          <Button size="sm" onClick={onManage} className="rounded-full">
+            Kelola
+          </Button>
         </div>
       </div>
     </div>

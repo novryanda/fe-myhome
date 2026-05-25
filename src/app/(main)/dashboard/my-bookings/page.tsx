@@ -5,11 +5,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { TenantManualPaymentDialog } from "@/components/tenant-manual-payment-dialog";
+import { type TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TenantManualPaymentDialog } from "@/components/tenant-manual-payment-dialog";
-import { TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 
@@ -279,7 +279,8 @@ export default function MyBookingsPage() {
                       </Badge>
                     </div>
                     <div className="mt-2 text-muted-foreground">
-                      Upload terakhir {dateLabel(latestManualProof.createdAt)} untuk nominal {currency(latestManualProof.transferAmount)}.
+                      Upload terakhir {dateLabel(latestManualProof.createdAt)} untuk nominal{" "}
+                      {currency(latestManualProof.transferAmount)}.
                     </div>
                     {latestManualProof.adminNote ? (
                       <div className="mt-2 text-sm">
@@ -404,7 +405,9 @@ export default function MyBookingsPage() {
         }}
         title="Pilih Pembayaran Perpanjangan"
         description="Tentukan apakah Anda ingin membuat pembayaran perpanjangan lewat Midtrans atau transfer manual."
-        amount={selectedRenewalBooking?.currentRenewalAmount || selectedRenewalBooking?.currentInitialPaymentAmount || 0}
+        amount={
+          selectedRenewalBooking?.currentRenewalAmount || selectedRenewalBooking?.currentInitialPaymentAmount || 0
+        }
         propertyName={selectedRenewalBooking?.property?.name}
         roomLabel={
           selectedRenewalBooking

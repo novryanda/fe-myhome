@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,28 +38,31 @@ export function LoginForm() {
   const onSubmit = async (data: z.infer<typeof FormSchema>) => {
     const redirectTo = searchParams.get("redirect");
     setIsLoading(true);
-    await authClient.signIn.email({
-      email: data.email,
-      password: data.password,
-      callbackURL: redirectTo || "/",
-    }, {
-      onRequest: () => {
-        toast.loading("Signing in...");
+    await authClient.signIn.email(
+      {
+        email: data.email,
+        password: data.password,
+        callbackURL: redirectTo || "/",
       },
-      onSuccess: async () => {
-        toast.dismiss();
-        toast.success("Signed in successfully!");
-        const session = await authClient.getSession();
-        router.push(getPostAuthPath(session.data?.user?.role, redirectTo));
+      {
+        onRequest: () => {
+          toast.loading("Signing in...");
+        },
+        onSuccess: async () => {
+          toast.dismiss();
+          toast.success("Signed in successfully!");
+          const session = await authClient.getSession();
+          router.push(getPostAuthPath(session.data?.user?.role, redirectTo));
+        },
+        onError: (ctx) => {
+          toast.dismiss();
+          toast.error(ctx.error.message || "Failed to sign in. Please check your credentials.");
+        },
+        onResponse: () => {
+          setIsLoading(false);
+        },
       },
-      onError: (ctx) => {
-        toast.dismiss();
-        toast.error(ctx.error.message || "Failed to sign in. Please check your credentials.");
-      },
-      onResponse: () => {
-        setIsLoading(false);
-      }
-    });
+    );
   };
 
   return (

@@ -1,13 +1,15 @@
-import Link from "next/link";
 import { headers } from "next/headers";
+import Link from "next/link";
+
 import { CheckCircle2, Clock3, CreditCard, Home, ReceiptText, XCircle } from "lucide-react";
 
-import { authClient } from "@/lib/auth-client";
-import { PublicFooter } from "../../_components/public-footer";
-import { PublicHeader } from "../../_components/public-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { authClient } from "@/lib/auth-client";
+
+import { PublicFooter } from "../../_components/public-footer";
+import { PublicHeader } from "../../_components/public-header";
 
 function getPaymentState(transactionStatus?: string) {
   const status = (transactionStatus || "").toLowerCase();
@@ -15,7 +17,8 @@ function getPaymentState(transactionStatus?: string) {
   if (status === "settlement" || status === "capture") {
     return {
       title: "Pembayaran Berhasil",
-      description: "Pembayaran Anda sudah diterima. Status booking akan diperbarui otomatis setelah callback Midtrans diproses.",
+      description:
+        "Pembayaran Anda sudah diterima. Status booking akan diperbarui otomatis setelah callback Midtrans diproses.",
       icon: CheckCircle2,
       tone: "success" as const,
       badge: "Berhasil",
@@ -25,7 +28,8 @@ function getPaymentState(transactionStatus?: string) {
   if (status === "pending") {
     return {
       title: "Pembayaran Sedang Diproses",
-      description: "Transaksi Anda sudah dibuat, tetapi pembayaran belum selesai. Anda bisa mengecek statusnya kembali di halaman pesanan.",
+      description:
+        "Transaksi Anda sudah dibuat, tetapi pembayaran belum selesai. Anda bisa mengecek statusnya kembali di halaman pesanan.",
       icon: Clock3,
       tone: "pending" as const,
       badge: "Pending",
@@ -34,7 +38,8 @@ function getPaymentState(transactionStatus?: string) {
 
   return {
     title: "Status Pembayaran Diterima",
-    description: "Redirect dari Midtrans berhasil diterima. Silakan cek detail status pembayaran Anda di halaman pesanan.",
+    description:
+      "Redirect dari Midtrans berhasil diterima. Silakan cek detail status pembayaran Anda di halaman pesanan.",
     icon: ReceiptText,
     tone: "neutral" as const,
     badge: "Informasi",
@@ -105,7 +110,9 @@ export default async function PaymentFinishPage({
                 <Badge className={`rounded-full px-4 py-1 ${toneClass.badge}`}>{paymentState.badge}</Badge>
               </div>
               <h1 className="text-4xl font-black tracking-tight text-zinc-950 sm:text-5xl">{paymentState.title}</h1>
-              <p className="mx-auto max-w-2xl text-sm leading-7 text-zinc-600 sm:text-base">{paymentState.description}</p>
+              <p className="mx-auto max-w-2xl text-sm leading-7 text-zinc-600 sm:text-base">
+                {paymentState.description}
+              </p>
             </div>
 
             <Card className={`rounded-[28px] border py-0 shadow-none ${toneClass.card}`}>
@@ -143,7 +150,10 @@ export default async function PaymentFinishPage({
                 </Button>
               </Link>
               <Link href="/">
-                <Button variant="outline" className="w-full rounded-full border-blue-200 text-blue-700 hover:bg-blue-50 sm:w-auto">
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full border-blue-200 text-blue-700 hover:bg-blue-50 sm:w-auto"
+                >
                   <Home className="mr-2 h-4 w-4" />
                   Beranda
                 </Button>

@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, LockKeyhole, Save, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
-import { authClient, useSession } from "@/lib/auth-client";
-import { api } from "@/lib/api";
-import { normalizeAssetUrl } from "@/lib/asset-url";
-import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
+import { normalizeAssetUrl } from "@/lib/asset-url";
+import { authClient, useSession } from "@/lib/auth-client";
+import { getInitials } from "@/lib/utils";
 
 export function PublicProfileSettingsClient() {
   const { data: session, isPending } = useSession();
@@ -193,7 +194,9 @@ export function PublicProfileSettingsClient() {
             <div className="relative">
               <Avatar className="h-24 w-24 border border-blue-100 bg-blue-50 p-1">
                 <AvatarImage src={displayAvatar} alt={name} className="rounded-full object-cover" />
-                <AvatarFallback className="rounded-full text-2xl">{getInitials(name || session.user.name || "U")}</AvatarFallback>
+                <AvatarFallback className="rounded-full text-2xl">
+                  {getInitials(name || session.user.name || "U")}
+                </AvatarFallback>
               </Avatar>
               {isUploading ? (
                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45">
@@ -257,7 +260,10 @@ export function PublicProfileSettingsClient() {
         </CardContent>
       </Card>
 
-      <Card id="security" className="rounded-[28px] border border-blue-100 shadow-[0_20px_60px_-30px_rgba(29,78,216,0.28)]">
+      <Card
+        id="security"
+        className="rounded-[28px] border border-blue-100 shadow-[0_20px_60px_-30px_rgba(29,78,216,0.28)]"
+      >
         <CardHeader>
           <CardTitle className="text-2xl">Keamanan Akun</CardTitle>
           <CardDescription>Ganti password tanpa perlu masuk ke dashboard sidebar.</CardDescription>
@@ -310,8 +316,16 @@ export function PublicProfileSettingsClient() {
             </div>
           </div>
 
-          <Button className="rounded-full bg-blue-700 hover:bg-blue-800" disabled={isChangingPassword} onClick={handleChangePassword}>
-            {isChangingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserRound className="mr-2 h-4 w-4" />}
+          <Button
+            className="rounded-full bg-blue-700 hover:bg-blue-800"
+            disabled={isChangingPassword}
+            onClick={handleChangePassword}
+          >
+            {isChangingPassword ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <UserRound className="mr-2 h-4 w-4" />
+            )}
             Simpan Password Baru
           </Button>
         </CardContent>

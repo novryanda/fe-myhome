@@ -1,12 +1,8 @@
-import PublicPropertyDetailClient from "./_components/public-property-detail-client";
 import { PublicFooter } from "../../_components/public-footer";
 import { PublicHeader } from "../../_components/public-header";
+import PublicPropertyDetailClient from "./_components/public-property-detail-client";
 
-export default async function PropertyDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   return (

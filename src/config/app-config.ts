@@ -10,5 +10,5 @@ export const APP_CONFIG = {
     title: "MyHome - Platform Pemesanan Kos Modern, Mudah, dan Terpercaya",
     description:
       "Temukan kos terbaik dengan mudah bersama MyHome. Jelajahi pilihan kos berkualitas, lihat fasilitas lengkap, bandingkan harga, dan pesan hunian yang paling cocok untuk kebutuhanmu dalam satu platform.",
-},
+  },
 };

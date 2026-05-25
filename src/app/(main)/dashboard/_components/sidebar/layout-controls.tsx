@@ -106,8 +106,6 @@ export function LayoutControls() {
       <PopoverContent align="end">
         <div className="flex flex-col gap-5">
           <div className="space-y-3 **:data-[slot=toggle-group]:w-full **:data-[slot=toggle-group-item]:flex-1 **:data-[slot=toggle-group-item]:text-xs">
-            
-
             <div className="space-y-1">
               <Label className="font-medium text-xs">Fonts</Label>
               <Select value={font} onValueChange={onFontChange}>

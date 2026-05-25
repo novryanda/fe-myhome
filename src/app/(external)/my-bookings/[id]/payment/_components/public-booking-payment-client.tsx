@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CalendarDays, CreditCard, Home, MapPin, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +12,7 @@ import { toast } from "sonner";
 import { PublicFooter } from "@/app/(external)/_components/public-footer";
 import { PublicHeader } from "@/app/(external)/_components/public-header";
 import { TenantManualPaymentDialog } from "@/components/tenant-manual-payment-dialog";
-import { TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
+import { type TenantPaymentMethod, TenantPaymentMethodDialog } from "@/components/tenant-payment-method-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -278,7 +279,9 @@ export default function PublicBookingPaymentClient() {
           <Card className="rounded-[32px] border border-blue-100 bg-white py-0 shadow-[0_20px_60px_-28px_rgba(29,78,216,0.22)]">
             <CardHeader className="pb-4">
               <CardTitle className="text-2xl font-black tracking-tight text-zinc-950">Metode Pembayaran</CardTitle>
-              <CardDescription>Pilih cara pembayaran yang ingin Anda gunakan untuk booking atau perpanjangan ini.</CardDescription>
+              <CardDescription>
+                Pilih cara pembayaran yang ingin Anda gunakan untuk booking atau perpanjangan ini.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="rounded-[24px] bg-blue-50/70 p-4 text-sm">
@@ -295,7 +298,8 @@ export default function PublicBookingPaymentClient() {
                 <>
                   {latestPaymentNeedsRefresh && latestPayment?.category === "BOOKING" ? (
                     <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-                      Harga kamar sudah diperbarui admin. Sistem akan membuat link pembayaran baru dengan nominal terbaru.
+                      Harga kamar sudah diperbarui admin. Sistem akan membuat link pembayaran baru dengan nominal
+                      terbaru.
                     </div>
                   ) : null}
                   {latestPaymentExpired && latestPayment?.category === "BOOKING" ? (
@@ -396,7 +400,6 @@ export default function PublicBookingPaymentClient() {
             </CardContent>
           </Card>
         </div>
-
       </main>
       <PublicFooter />
 
@@ -424,7 +427,9 @@ export default function PublicBookingPaymentClient() {
                 )}`
             : null
         }
-        amount={canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment}
+        amount={
+          canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment
+        }
         manualPaymentAccounts={manualPaymentAccounts}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["public-booking-payment", params.id] });
@@ -441,7 +446,9 @@ export default function PublicBookingPaymentClient() {
             ? "Tentukan apakah Anda ingin melanjutkan perpanjangan melalui Midtrans atau transfer manual."
             : "Tentukan apakah Anda ingin melanjutkan pembayaran booking melalui Midtrans atau transfer manual."
         }
-        amount={canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment}
+        amount={
+          canPayRenewal ? booking?.currentRenewalAmount || booking?.currentInitialPaymentAmount || 0 : totalFirstPayment
+        }
         propertyName={booking?.property?.name}
         roomLabel={booking ? `${booking.roomType?.name || "-"} / ${booking.room?.roomNumber || "-"}` : null}
         bookingCode={booking?.bookingCode || "-"}

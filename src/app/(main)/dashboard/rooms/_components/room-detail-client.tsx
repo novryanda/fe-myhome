@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,7 +44,6 @@ import { useSession } from "@/lib/auth-client";
 
 import { RoomInventoryGrid } from "./room-inventory-grid";
 import { RoomManagementTab } from "./room-management-tab";
-import { RoomPaymentHistoryDialog } from "./room-payment-history-dialog";
 
 interface RoomImage {
   url: string;
@@ -98,7 +97,6 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const [historyRoom, setHistoryRoom] = useState<RoomUnit | null>(null);
 
   const isAdmin = session?.user?.role === "ADMIN";
 
@@ -345,7 +343,9 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
           <Card className="border-none bg-slate-50/50 shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg">Daftar Keseluruhan Kamar</CardTitle>
-              <CardDescription>Lihat semua unit kamar dan buka histori pembayarannya langsung dari sini.</CardDescription>
+              <CardDescription>
+                Lihat semua unit kamar dan buka histori pembayarannya langsung dari sini.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -381,9 +381,11 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
                           <TableCell>{dateLabel(unit.currentBooking?.checkInAt)}</TableCell>
                           <TableCell>{dateLabel(unit.currentBooking?.nextDueDate)}</TableCell>
                           <TableCell className="text-right">
-                            <Button size="sm" variant="outline" onClick={() => setHistoryRoom(unit)}>
-                              <History className="mr-2 h-4 w-4" />
-                              Lihat History
+                            <Button size="sm" variant="outline" asChild>
+                              <Link href={`/dashboard/rooms/unit/${unit.id}`}>
+                                <History className="mr-2 h-4 w-4" />
+                                Lihat History
+                              </Link>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -657,18 +659,6 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
           </div>
         </div>
       </div>
-
-      <RoomPaymentHistoryDialog
-        open={!!historyRoom}
-        onOpenChange={(open) => {
-          if (!open) {
-            setHistoryRoom(null);
-          }
-        }}
-        room={historyRoom}
-        roomTypeName={room.name}
-        propertyId={room.propertyId}
-      />
     </div>
   );
 }

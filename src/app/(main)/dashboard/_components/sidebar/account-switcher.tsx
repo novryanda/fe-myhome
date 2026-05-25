@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { BadgeCheck, Bell, CreditCard, LogOut } from "lucide-react";
 import Link from "next/link";
+
+import { BadgeCheck, Bell, CreditCard, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,8 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn, getInitials } from "@/lib/utils";
 import { authClient, useSession } from "@/lib/auth-client";
+import { cn, getInitials } from "@/lib/utils";
 
 export function AccountSwitcher({
   users: staticUsers,
@@ -67,13 +68,15 @@ export function AccountSwitcher({
         {session?.user && (
           <DropdownMenuItem
             className={cn("p-0", currentUser.id === session.user.id && "border-l-2 border-l-primary bg-accent/50")}
-            onClick={() => setActiveUser({
-              id: session.user.id,
-              name: session.user.name,
-              email: session.user.email,
-              avatar: session.user.image,
-              role: session.user.role || "USER",
-            })}
+            onClick={() =>
+              setActiveUser({
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email,
+                avatar: session.user.image,
+                role: session.user.role || "USER",
+              })
+            }
           >
             <div className="flex w-full items-center justify-between gap-2 px-1 py-1.5">
               <Avatar className="size-9 rounded-lg">
@@ -119,15 +122,18 @@ export function AccountSwitcher({
           </Link>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={async () => {
-          await authClient.signOut({
-            fetchOptions: {
-              onSuccess: () => {
-                window.location.href = "/auth/login";
-              }
-            }
-          });
-        }} className="cursor-pointer text-destructive focus:text-destructive">
+        <DropdownMenuItem
+          onClick={async () => {
+            await authClient.signOut({
+              fetchOptions: {
+                onSuccess: () => {
+                  window.location.href = "/auth/login";
+                },
+              },
+            });
+          }}
+          className="cursor-pointer text-destructive focus:text-destructive"
+        >
           <LogOut />
           Log out
         </DropdownMenuItem>

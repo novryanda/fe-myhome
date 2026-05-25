@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import { useParams, useRouter } from "next/navigation";
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { api } from "@/lib/api";
-import { useSession } from "@/lib/auth-client";
+import { PublicFooter } from "@/app/(external)/_components/public-footer";
+import { PublicHeader } from "@/app/(external)/_components/public-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { PublicFooter } from "@/app/(external)/_components/public-footer";
-import { PublicHeader } from "@/app/(external)/_components/public-header";
+import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
 
 const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
@@ -91,7 +93,9 @@ export default function BookRoomPage() {
         <div className="space-y-3">
           <Badge variant="secondary">Checkout Booking</Badge>
           <h1 className="text-4xl font-bold tracking-tight">{roomType.name}</h1>
-          <p className="text-muted-foreground">{roomType.property?.name} • {roomType.property?.address}</p>
+          <p className="text-muted-foreground">
+            {roomType.property?.name} • {roomType.property?.address}
+          </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -124,25 +128,41 @@ export default function BookRoomPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Nomor WhatsApp Tenant</label>
-                <Input value={tenantPhone} onChange={(event) => setTenantPhone(event.target.value)} placeholder="08xxxxxxxxxx" />
+                <Input
+                  value={tenantPhone}
+                  onChange={(event) => setTenantPhone(event.target.value)}
+                  placeholder="08xxxxxxxxxx"
+                />
                 {session?.user && profileQuery.data?.phone ? (
-                  <p className="text-xs text-muted-foreground">Nomor dari profil sudah terisi otomatis, Anda tetap bisa mengubahnya.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Nomor dari profil sudah terisi otomatis, Anda tetap bisa mengubahnya.
+                  </p>
                 ) : null}
               </div>
 
               <label className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-                <input type="checkbox" checked={isSubscription} onChange={(event) => setIsSubscription(event.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={isSubscription}
+                  onChange={(event) => setIsSubscription(event.target.checked)}
+                />
                 Aktifkan perpanjangan berlangganan dengan reminder H-7
               </label>
 
-              <Button className="w-full" disabled={!session?.user || !pricingType || createBooking.isPending} onClick={() => createBooking.mutate()}>
+              <Button
+                className="w-full"
+                disabled={!session?.user || !pricingType || createBooking.isPending}
+                onClick={() => createBooking.mutate()}
+              >
                 {session?.user ? "Buat Booking & Lanjut ke Pembayaran" : "Login untuk Booking"}
               </Button>
               {!session?.user && (
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => router.push(`/auth/login?redirect=${encodeURIComponent(`/room-types/${params.id}/book`)}`)}
+                  onClick={() =>
+                    router.push(`/auth/login?redirect=${encodeURIComponent(`/room-types/${params.id}/book`)}`)
+                  }
                 >
                   Login
                 </Button>

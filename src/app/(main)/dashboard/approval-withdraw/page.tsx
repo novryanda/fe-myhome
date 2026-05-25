@@ -1,16 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+
 import { CheckCircle2, Loader2, Search, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { useSession } from "@/lib/auth-client";
-import { useFinanceSummary, useUpdateWithdrawalStatus, useWithdrawals } from "@/hooks/use-finance";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useFinanceSummary, useUpdateWithdrawalStatus, useWithdrawals } from "@/hooks/use-finance";
+import { useSession } from "@/lib/auth-client";
+
 import { PageHero } from "../_components/page-hero";
 
 const currency = (value?: number) =>
@@ -120,13 +122,21 @@ export default function ApprovalWithdrawPage() {
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-muted/40">
           <CardTitle>Approval Queue</CardTitle>
-          <CardDescription>Pola referensi yang dipakai: queue approval dengan status, rekening snapshot, dan bukti transfer setelah sukses.</CardDescription>
+          <CardDescription>
+            Pola referensi yang dipakai: queue approval dengan status, rekening snapshot, dan bukti transfer setelah
+            sukses.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
           <div className="flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Cari admin, rekening, email..." />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="pl-9"
+                placeholder="Cari admin, rekening, email..."
+              />
             </div>
             <select
               value={status}
@@ -141,7 +151,8 @@ export default function ApprovalWithdrawPage() {
           </div>
 
           <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
-            {pendingItems.length} request masih menunggu approval. Saat `SUCCESS`, bukti transfer wajib diunggah. Saat `REJECTED`, saldo admin otomatis dikembalikan.
+            {pendingItems.length} request masih menunggu approval. Saat `SUCCESS`, bukti transfer wajib diunggah. Saat
+            `REJECTED`, saldo admin otomatis dikembalikan.
           </div>
 
           <Table>
@@ -167,10 +178,16 @@ export default function ApprovalWithdrawPage() {
                   <TableCell className="font-medium">{currency(item.amount)}</TableCell>
                   <TableCell>
                     <div>{item.bankName}</div>
-                    <div className="text-xs text-muted-foreground">{item.accountNumber} • {item.accountHolder}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.accountNumber} • {item.accountHolder}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={item.status === "SUCCESS" ? "default" : item.status === "REJECTED" ? "destructive" : "secondary"}>
+                    <Badge
+                      variant={
+                        item.status === "SUCCESS" ? "default" : item.status === "REJECTED" ? "destructive" : "secondary"
+                      }
+                    >
                       {item.status}
                     </Badge>
                   </TableCell>
@@ -178,7 +195,12 @@ export default function ApprovalWithdrawPage() {
                     {item.adminNote || "-"}
                     {item.receiptUrl ? (
                       <div>
-                        <a href={item.receiptUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">
+                        <a
+                          href={item.receiptUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                        >
                           Buka bukti transfer
                         </a>
                       </div>
@@ -218,7 +240,9 @@ export default function ApprovalWithdrawPage() {
           <DialogHeader>
             <DialogTitle>{modalMode === "SUCCESS" ? "Setujui Pencairan" : "Tolak Pencairan"}</DialogTitle>
             <DialogDescription>
-              {selected ? `${selected.adminName || "Admin"} mengajukan ${currency(selected.amount)} ke ${selected.bankName} ${selected.accountNumber}.` : ""}
+              {selected
+                ? `${selected.adminName || "Admin"} mengajukan ${currency(selected.amount)} ke ${selected.bankName} ${selected.accountNumber}.`
+                : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -228,18 +252,30 @@ export default function ApprovalWithdrawPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Unggah Bukti Transfer</div>
                   <Input type="file" accept="image/*" onChange={(event) => uploadReceipt(event.target.files?.[0])} />
-                  <Input value={receiptUrl} onChange={(event) => setReceiptUrl(event.target.value)} placeholder="Atau tempel URL bukti transfer" />
+                  <Input
+                    value={receiptUrl}
+                    onChange={(event) => setReceiptUrl(event.target.value)}
+                    placeholder="Atau tempel URL bukti transfer"
+                  />
                   {isUploading ? <div className="text-sm text-muted-foreground">Mengunggah bukti...</div> : null}
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Catatan Approval</div>
-                  <Textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="Contoh: Transfer berhasil ke rekening tujuan." />
+                  <Textarea
+                    value={adminNote}
+                    onChange={(event) => setAdminNote(event.target.value)}
+                    placeholder="Contoh: Transfer berhasil ke rekening tujuan."
+                  />
                 </div>
               </>
             ) : (
               <div className="space-y-2">
                 <div className="text-sm font-medium">Alasan Penolakan</div>
-                <Textarea value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="Contoh: Data rekening tidak valid." />
+                <Textarea
+                  value={adminNote}
+                  onChange={(event) => setAdminNote(event.target.value)}
+                  placeholder="Contoh: Data rekening tidak valid."
+                />
               </div>
             )}
           </div>
@@ -285,15 +321,7 @@ export default function ApprovalWithdrawPage() {
   );
 }
 
-function SummaryCard({
-  title,
-  value,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  icon: typeof ShieldCheck;
-}) {
+function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof ShieldCheck }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

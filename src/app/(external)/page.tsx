@@ -1,33 +1,24 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Building2,
-  ChevronRight,
-  Compass,
-  MapPin,
-  Navigation,
-  Search,
-  Sparkles,
-} from "lucide-react";
 
-import { api } from "@/lib/api";
+import Link from "next/link";
+
+import { useQuery } from "@tanstack/react-query";
+import { Building2, ChevronRight, Compass, MapPin, Navigation, Search, Sparkles } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 
-import { PublicHeader } from "./_components/public-header";
 import { PublicFooter } from "./_components/public-footer";
+import { PublicHeader } from "./_components/public-header";
 import { PublicPropertyCard } from "./_components/public-property-card";
 
-function getDistanceKm(
-  from: { latitude: number; longitude: number },
-  to: { latitude: number; longitude: number },
-) {
+function getDistanceKm(from: { latitude: number; longitude: number }, to: { latitude: number; longitude: number }) {
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const earthRadiusKm = 6371;
   const dLat = toRadians(to.latitude - from.latitude);
@@ -36,8 +27,7 @@ function getDistanceKm(
   const lat2 = toRadians(to.latitude);
 
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusKm * c;
 }
@@ -169,8 +159,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
-            </div>
+            <div className="flex flex-wrap gap-3 text-sm text-zinc-600"></div>
           </div>
 
           <Card className="overflow-hidden rounded-[32px] border border-blue-100 bg-white/95 py-0 shadow-[0_30px_80px_-30px_rgba(29,78,216,0.28)]">
@@ -181,7 +170,9 @@ export default function Home() {
 
               <div className="space-y-3">
                 <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Lokasi / Area</div>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Lokasi / Area
+                  </div>
                   <div className="flex items-center gap-3">
                     <Search className="h-4 w-4 text-blue-700" />
                     <Input
@@ -219,8 +210,6 @@ export default function Home() {
                 </div>
               </div>
 
-  
-
               <div className="space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Kota populer</div>
                 <div className="flex flex-wrap gap-2">
@@ -245,7 +234,9 @@ export default function Home() {
         <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Daftar Kos</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">Kos yang sedang tersedia</h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
+              Kos yang sedang tersedia
+            </h2>
           </div>
           <div className="rounded-full border border-blue-100 bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm">
             {properties.length} properti ditemukan
@@ -263,7 +254,9 @@ export default function Home() {
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Jelajah kota</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">Cari kos berdasarkan kota</h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
+              Cari kos berdasarkan kota
+            </h2>
           </div>
         </div>
 

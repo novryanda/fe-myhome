@@ -160,7 +160,8 @@ export function TenantPaymentMethodDialog({
               <div>
                 <div className="font-medium">Rekening Tujuan Tersedia</div>
                 <div className="text-sm text-muted-foreground">
-                  Rekening berikut sudah didaftarkan admin dan juga akan ditampilkan lagi di form upload bukti pembayaran.
+                  Rekening berikut sudah didaftarkan admin dan juga akan ditampilkan lagi di form upload bukti
+                  pembayaran.
                 </div>
               </div>
 

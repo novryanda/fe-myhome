@@ -87,7 +87,12 @@ const NavItemExpanded = ({
                     asChild
                     className="h-8 transition-colors hover:bg-sidebar-accent/40 rounded-md data-[active=true]:bg-sidebar-accent/60 data-[active=true]:text-sidebar-accent-foreground"
                   >
-                    <Link prefetch={false} href={subItem.url} target={subItem.newTab ? "_blank" : undefined} className="flex items-center gap-2">
+                    <Link
+                      prefetch={false}
+                      href={subItem.url}
+                      target={subItem.newTab ? "_blank" : undefined}
+                      className="flex items-center gap-2"
+                    >
                       {subItem.icon && <subItem.icon className="size-3.5 shrink-0 opacity-70" />}
                       <span className="text-[13px]">{subItem.title}</span>
                       {subItem.comingSoon && <IsComingSoon />}
@@ -125,7 +130,11 @@ const NavItemCollapsed = ({
             <ChevronRight className="ml-auto size-4 transition-transform group-data-state-open:rotate-90" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 space-y-1 p-2 rounded-xl border-border shadow-xl backdrop-blur-md" side="right" align="start">
+        <DropdownMenuContent
+          className="w-56 space-y-1 p-2 rounded-xl border-border shadow-xl backdrop-blur-md"
+          side="right"
+          align="start"
+        >
           {item.subItems?.map((subItem) => (
             <DropdownMenuItem key={subItem.title} asChild className="rounded-lg">
               <SidebarMenuSubButton
@@ -135,7 +144,12 @@ const NavItemCollapsed = ({
                 aria-disabled={subItem.comingSoon}
                 isActive={isActive(subItem.url)}
               >
-                <Link prefetch={false} href={subItem.url} target={subItem.newTab ? "_blank" : undefined} className="flex items-center gap-3">
+                <Link
+                  prefetch={false}
+                  href={subItem.url}
+                  target={subItem.newTab ? "_blank" : undefined}
+                  className="flex items-center gap-3"
+                >
                   {subItem.icon && <subItem.icon className="size-4 shrink-0 text-sidebar-foreground/70" />}
                   <span className="text-sm font-medium">{subItem.title}</span>
                   {subItem.comingSoon && <IsComingSoon />}
@@ -169,8 +183,7 @@ export function NavMain({ items }: NavMainProps) {
       <SidebarGroup>
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
-            <SidebarMenuItem className="flex items-center gap-2">
-            </SidebarMenuItem>
+            <SidebarMenuItem className="flex items-center gap-2"></SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
