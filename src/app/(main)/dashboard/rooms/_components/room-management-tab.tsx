@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Edit2, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Edit2, History, Loader2, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 
+import { RoomPaymentHistoryDialog } from "./room-payment-history-dialog";
+
 type RoomStatus = "AVAILABLE" | "RESERVED" | "BOOKED" | "OCCUPIED" | "MAINTENANCE";
 
 interface Room {
@@ -42,6 +44,8 @@ interface Room {
 
 interface RoomManagementTabProps {
   roomTypeId: string;
+  roomTypeName: string;
+  propertyId?: string | null;
   rooms: Room[];
   pricingOptions: Array<{
     value: "WEEKLY" | "MONTHLY" | "THREE_MONTHLY" | "YEARLY";
@@ -80,7 +84,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
 
-export function RoomManagementTab({ roomTypeId, rooms, pricingOptions }: RoomManagementTabProps) {
+export function RoomManagementTab({ roomTypeId, roomTypeName, propertyId, rooms, pricingOptions }: RoomManagementTabProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ roomNumber: string; status: RoomStatus }>({
@@ -91,6 +95,7 @@ export function RoomManagementTab({ roomTypeId, rooms, pricingOptions }: RoomMan
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null);
   const [assignRoom, setAssignRoom] = useState<Room | null>(null);
+  const [historyRoom, setHistoryRoom] = useState<Room | null>(null);
   const [assignForm, setAssignForm] = useState({
     tenantFullName: "",
     tenantEmail: "",
@@ -468,6 +473,10 @@ export function RoomManagementTab({ roomTypeId, rooms, pricingOptions }: RoomMan
                         Isi Kamar
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => setHistoryRoom(room)}>
+                      <History className="mr-2 h-4 w-4" />
+                      Riwayat Pembayaran
+                    </Button>
                     {editingId === room.id ? (
                       <>
                         <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={handleSaveEdit}>
@@ -534,6 +543,18 @@ export function RoomManagementTab({ roomTypeId, rooms, pricingOptions }: RoomMan
           </TableBody>
         </Table>
       </div>
+
+      <RoomPaymentHistoryDialog
+        open={!!historyRoom}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryRoom(null);
+          }
+        }}
+        room={historyRoom}
+        roomTypeName={roomTypeName}
+        propertyId={propertyId}
+      />
     </div>
   );
 }

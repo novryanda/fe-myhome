@@ -1,12 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, Bath, Bed, CheckCircle2, Edit, Home, Maximize, Trash, Users } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Bath,
+  Bed,
+  CheckCircle2,
+  Edit,
+  History,
+  Home,
+  Maximize,
+  Trash,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,12 +37,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 
 import { RoomInventoryGrid } from "./room-inventory-grid";
 import { RoomManagementTab } from "./room-management-tab";
+import { RoomPaymentHistoryDialog } from "./room-payment-history-dialog";
 
 interface RoomImage {
   url: string;
@@ -48,6 +62,22 @@ interface Rule {
   id: string;
   name: string;
   description?: string | null;
+}
+
+type RoomStatus = "AVAILABLE" | "RESERVED" | "BOOKED" | "OCCUPIED" | "MAINTENANCE";
+
+interface RoomUnit {
+  id: string;
+  roomNumber: string;
+  status: RoomStatus;
+  currentBooking?: {
+    id: string;
+    tenantName: string;
+    tenantEmail: string;
+    tenantPhone?: string | null;
+    checkInAt?: string | Date | null;
+    nextDueDate?: string | Date | null;
+  } | null;
 }
 
 interface RoomDetailClientProps {
@@ -68,6 +98,7 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const [historyRoom, setHistoryRoom] = useState<RoomUnit | null>(null);
 
   const isAdmin = session?.user?.role === "ADMIN";
 
@@ -97,6 +128,7 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
   });
 
   const room = roomData?.data;
+  const unitRooms = ((room?.rooms || []) as RoomUnit[]).slice();
   const { bedroomImages, bathroomImages, otherImages, allImages, mosaicImages } = useMemo(() => {
     const images = (room?.images ?? []) as RoomImage[];
     const bedroom = images.filter((img) => img.category === "BEDROOM");
@@ -122,6 +154,25 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
       currency: "IDR",
       minimumFractionDigits: 0,
     }).format(number);
+  };
+
+  const dateLabel = (value?: string | Date | null) =>
+    value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
+
+  const roomStatusLabelMap: Record<RoomStatus, string> = {
+    AVAILABLE: "Tersedia",
+    RESERVED: "Dipesan",
+    BOOKED: "Booking Aktif",
+    OCCUPIED: "Terisi",
+    MAINTENANCE: "Perbaikan",
+  };
+
+  const roomStatusVariantMap: Record<RoomStatus, "success" | "warning" | "destructive" | "secondary"> = {
+    AVAILABLE: "success",
+    RESERVED: "warning",
+    BOOKED: "warning",
+    OCCUPIED: "destructive",
+    MAINTENANCE: "secondary",
   };
 
   if (isLoading) {
@@ -289,7 +340,66 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
             </p>
           </div>
 
-          <RoomInventoryGrid rooms={room.rooms || []} />
+          <RoomInventoryGrid rooms={unitRooms} />
+
+          <Card className="border-none bg-slate-50/50 shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Daftar Keseluruhan Kamar</CardTitle>
+              <CardDescription>Lihat semua unit kamar dan buka histori pembayarannya langsung dari sini.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Penghuni Aktif</TableHead>
+                      <TableHead>Check-in</TableHead>
+                      <TableHead>Jatuh Tempo</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unitRooms.length ? (
+                      unitRooms.map((unit) => (
+                        <TableRow key={unit.id}>
+                          <TableCell className="font-medium">{unit.roomNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={roomStatusVariantMap[unit.status]}>{roomStatusLabelMap[unit.status]}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {unit.currentBooking ? (
+                              <div>
+                                <div className="font-medium">{unit.currentBooking.tenantName}</div>
+                                <div className="text-muted-foreground text-xs">{unit.currentBooking.tenantEmail}</div>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">Belum ada penghuni</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{dateLabel(unit.currentBooking?.checkInAt)}</TableCell>
+                          <TableCell>{dateLabel(unit.currentBooking?.nextDueDate)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => setHistoryRoom(unit)}>
+                              <History className="mr-2 h-4 w-4" />
+                              Lihat History
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                          Belum ada unit kamar untuk tipe ini.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
           <Tabs defaultValue="specification" className="w-full">
             <TabsList className={`grid w-full ${isAdmin ? "grid-cols-3" : "grid-cols-2"} lg:w-[600px]`}>
@@ -466,7 +576,13 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
 
             {isAdmin && (
               <TabsContent value="management" className="pt-6">
-                <RoomManagementTab roomTypeId={room.id} rooms={room.rooms || []} pricingOptions={pricingOptions} />
+                <RoomManagementTab
+                  roomTypeId={room.id}
+                  roomTypeName={room.name}
+                  propertyId={room.propertyId}
+                  rooms={unitRooms}
+                  pricingOptions={pricingOptions}
+                />
               </TabsContent>
             )}
           </Tabs>
@@ -541,6 +657,18 @@ export default function RoomDetailClient({ roomId }: RoomDetailClientProps) {
           </div>
         </div>
       </div>
+
+      <RoomPaymentHistoryDialog
+        open={!!historyRoom}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryRoom(null);
+          }
+        }}
+        room={historyRoom}
+        roomTypeName={room.name}
+        propertyId={room.propertyId}
+      />
     </div>
   );
 }
