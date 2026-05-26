@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -125,7 +128,20 @@ const getWhatsAppUrl = (phone?: string | null) => {
   return `https://wa.me/${normalized}`;
 };
 
+const AVAILABLE_ROOM_TYPES_SECTION_ID = "available-room-types";
+
+const scrollToSection = (elementId: string) => {
+  const section = document.getElementById(elementId);
+
+  if (!section) return false;
+
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  return true;
+};
+
 export default function PublicPropertyDetailClient({ propertyId }: { propertyId: string }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const query = useQuery({
     queryKey: ["public-property-detail", propertyId],
     queryFn: async () => {
@@ -139,8 +155,23 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
   const property = query.data?.data as PropertyDetail | undefined;
   const propertyImages = property?.images ?? [];
   const roomTypes = property?.roomTypes ?? [];
-  const availableRoomTypes = roomTypes.filter((roomType) => roomType.availableRooms > 0).length;
+  const firstAvailableRoomType = roomTypes.find((roomType) => roomType.availableRooms > 0);
   const availableRooms = roomTypes.reduce((total, roomType) => total + (roomType.availableRooms ?? 0), 0);
+
+  useEffect(() => {
+    if (query.isLoading || roomTypes.length === 0) return;
+
+    const hash = window.location.hash.replace("#", "");
+
+    if (!hash) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToSection(hash);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [query.isLoading, roomTypes.length]);
+
   if (query.isLoading) {
     return (
       <div className="space-y-8">
@@ -182,6 +213,14 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
   const galleryImages = propertyImages.slice(0, 5);
   const mapsUrl = getGoogleMapsUrl(property);
   const whatsappUrl = getWhatsAppUrl(property.admin?.profile?.phone);
+  const availableRoomsTargetId = firstAvailableRoomType
+    ? `room-type-${firstAvailableRoomType.id}`
+    : AVAILABLE_ROOM_TYPES_SECTION_ID;
+
+  const handleAvailableRoomsClick = () => {
+    router.push(`${pathname}#${availableRoomsTargetId}`, { scroll: false });
+    scrollToSection(availableRoomsTargetId);
+  };
 
   return (
     <div className="space-y-10 pb-10">
@@ -204,8 +243,14 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
                   {property.city.name}
                 </Badge>
               ) : null}
-              <Badge variant="outline" className="rounded-full border-blue-200 bg-white px-4 py-1 text-blue-700">
-                {availableRooms} kamar tersedia
+              <Badge
+                asChild
+                variant="outline"
+                className="rounded-full border-blue-200 bg-white px-4 py-1 text-blue-700"
+              >
+                <button type="button" onClick={handleAvailableRoomsClick} className="cursor-pointer hover:bg-blue-50">
+                  {availableRooms} kamar tersedia
+                </button>
               </Badge>
             </div>
 
@@ -379,7 +424,7 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
         </Card>
       </section>
 
-      <section className="space-y-5">
+      <section id={AVAILABLE_ROOM_TYPES_SECTION_ID} className="scroll-mt-28 space-y-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Tipe Kamar</div>
@@ -401,7 +446,8 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
               return (
                 <Card
                   key={roomType.id}
-                  className="overflow-hidden rounded-[32px] border border-blue-100 bg-white py-0 shadow-[0_24px_70px_-34px_rgba(29,78,216,0.24)]"
+                  id={`room-type-${roomType.id}`}
+                  className="scroll-mt-28 overflow-hidden rounded-[32px] border border-blue-100 bg-white py-0 shadow-[0_24px_70px_-34px_rgba(29,78,216,0.24)]"
                 >
                   <div className="grid lg:grid-cols-[320px_1fr]">
                     <div className="relative overflow-hidden bg-blue-50">
