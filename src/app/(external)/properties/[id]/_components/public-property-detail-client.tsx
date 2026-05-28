@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -142,6 +142,7 @@ const scrollToSection = (elementId: string) => {
 export default function PublicPropertyDetailClient({ propertyId }: { propertyId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const query = useQuery({
     queryKey: ["public-property-detail", propertyId],
     queryFn: async () => {
@@ -155,7 +156,8 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
   const property = query.data?.data as PropertyDetail | undefined;
   const propertyImages = property?.images ?? [];
   const roomTypes = property?.roomTypes ?? [];
-  const firstAvailableRoomType = roomTypes.find((roomType) => roomType.availableRooms > 0);
+  const availableRoomTypes = roomTypes.filter((roomType) => roomType.availableRooms > 0);
+  const displayedRoomTypes = showAvailableOnly ? availableRoomTypes : roomTypes;
   const availableRooms = roomTypes.reduce((total, roomType) => total + (roomType.availableRooms ?? 0), 0);
 
   useEffect(() => {
@@ -164,6 +166,10 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
     const hash = window.location.hash.replace("#", "");
 
     if (!hash) return;
+
+    if (hash === AVAILABLE_ROOM_TYPES_SECTION_ID) {
+      setShowAvailableOnly(true);
+    }
 
     const frame = window.requestAnimationFrame(() => {
       scrollToSection(hash);
@@ -213,13 +219,16 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
   const galleryImages = propertyImages.slice(0, 5);
   const mapsUrl = getGoogleMapsUrl(property);
   const whatsappUrl = getWhatsAppUrl(property.admin?.profile?.phone);
-  const availableRoomsTargetId = firstAvailableRoomType
-    ? `room-type-${firstAvailableRoomType.id}`
-    : AVAILABLE_ROOM_TYPES_SECTION_ID;
 
   const handleAvailableRoomsClick = () => {
-    router.push(`${pathname}#${availableRoomsTargetId}`, { scroll: false });
-    scrollToSection(availableRoomsTargetId);
+    setShowAvailableOnly(true);
+    router.push(`${pathname}#${AVAILABLE_ROOM_TYPES_SECTION_ID}`, { scroll: false });
+    scrollToSection(AVAILABLE_ROOM_TYPES_SECTION_ID);
+  };
+
+  const handleShowAllRoomTypes = () => {
+    setShowAvailableOnly(false);
+    router.push(pathname, { scroll: false });
   };
 
   return (
@@ -428,16 +437,30 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Tipe Kamar</div>
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950">Pilihan tipe tersedia</h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-zinc-950">
+              {showAvailableOnly ? "Tipe kamar yang tersedia" : "Pilihan tipe tersedia"}
+            </h2>
           </div>
-          <div className="rounded-full border border-blue-100 bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm">
-            {roomTypes.length} tipe kamar
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-full border border-blue-100 bg-white px-4 py-2 text-sm text-zinc-600 shadow-sm">
+              {displayedRoomTypes.length} tipe kamar
+            </div>
+            {showAvailableOnly && availableRoomTypes.length < roomTypes.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleShowAllRoomTypes}
+                className="rounded-full border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                Tampilkan Semua
+              </Button>
+            ) : null}
           </div>
         </div>
 
-        {roomTypes.length > 0 ? (
+        {displayedRoomTypes.length > 0 ? (
           <div className="space-y-6">
-            {roomTypes.map((roomType) => {
+            {displayedRoomTypes.map((roomType) => {
               const cover = roomType.images?.[0]?.url;
               const priceItems = roomType.pricingSummary ?? [];
               const lowestPrice = getLowestPrice(priceItems);
@@ -599,9 +622,13 @@ export default function PublicPropertyDetailClient({ propertyId }: { propertyId:
         ) : (
           <div className="rounded-[32px] border border-dashed border-blue-200 bg-white/80 p-10 text-center">
             <Home className="mx-auto h-10 w-10 text-blue-300" />
-            <h3 className="mt-4 text-xl font-bold text-zinc-950">Belum ada tipe kamar</h3>
+            <h3 className="mt-4 text-xl font-bold text-zinc-950">
+              {showAvailableOnly ? "Belum ada tipe kamar yang tersedia" : "Belum ada tipe kamar"}
+            </h3>
             <p className="mt-2 text-sm leading-6 text-zinc-500">
-              Properti ini belum memiliki tipe kamar yang dapat ditampilkan ke publik.
+              {showAvailableOnly
+                ? "Saat ini belum ada tipe kamar dengan unit yang masih tersedia."
+                : "Properti ini belum memiliki tipe kamar yang dapat ditampilkan ke publik."}
             </p>
           </div>
         )}
