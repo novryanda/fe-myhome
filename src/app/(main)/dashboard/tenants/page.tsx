@@ -104,17 +104,21 @@ type PropertyOption = {
   name: string;
 };
 
+type TenantSortBy = "roomNumber" | "nextDueDate";
+type TenantSortOrder = "asc" | "desc";
+
 async function fetchAllTenants(
   search?: string,
   dueStatus: "ALL" | "OVERDUE" | "ON_TIME" = "ALL",
-  roomSortOrder?: "asc" | "desc",
+  sortBy?: TenantSortBy,
+  sortOrder?: TenantSortOrder,
 ) {
   const firstResponse = await api.get("/api/tenants", {
     params: {
       search,
       dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
-      sortBy: roomSortOrder ? "roomNumber" : undefined,
-      sortOrder: roomSortOrder,
+      sortBy,
+      sortOrder,
       page: 1,
       size: 100,
     },
@@ -129,8 +133,8 @@ async function fetchAllTenants(
       params: {
         search,
         dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
-        sortBy: roomSortOrder ? "roomNumber" : undefined,
-        sortOrder: roomSortOrder,
+        sortBy,
+        sortOrder,
         page,
         size: 100,
       },
@@ -147,7 +151,8 @@ export default function TenantsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dueStatus, setDueStatus] = useState<"ALL" | "OVERDUE" | "ON_TIME">("ALL");
-  const [roomSortOrder, setRoomSortOrder] = useState<"asc" | "desc" | undefined>();
+  const [sortBy, setSortBy] = useState<TenantSortBy | undefined>();
+  const [sortOrder, setSortOrder] = useState<TenantSortOrder | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isExporting, setIsExporting] = useState(false);
@@ -164,14 +169,14 @@ export default function TenantsPage() {
   });
 
   const tenantsQuery = useQuery({
-    queryKey: ["tenants", search, dueStatus, roomSortOrder, page, pageSize],
+    queryKey: ["tenants", search, dueStatus, sortBy, sortOrder, page, pageSize],
     queryFn: async () => {
       const response = await api.get("/api/tenants", {
         params: {
           search,
           dueStatus: dueStatus === "ALL" ? undefined : dueStatus,
-          sortBy: roomSortOrder ? "roomNumber" : undefined,
-          sortOrder: roomSortOrder,
+          sortBy,
+          sortOrder,
           page,
           size: pageSize,
         },
@@ -376,15 +381,17 @@ export default function TenantsPage() {
     setPage(1);
   };
 
-  const handleRoomSortToggle = () => {
-    setRoomSortOrder((current) => (current === "asc" ? "desc" : "asc"));
+  const handleSortToggle = (column: TenantSortBy) => {
+    const isSameColumn = sortBy === column;
+    setSortBy(column);
+    setSortOrder(isSameColumn && sortOrder === "asc" ? "desc" : "asc");
     setPage(1);
   };
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const rows = (await fetchAllTenants(search || undefined, dueStatus, roomSortOrder)) as TenantRow[];
+      const rows = (await fetchAllTenants(search || undefined, dueStatus, sortBy, sortOrder)) as TenantRow[];
 
       if (!rows.length) {
         toast.error("Tidak ada data penghuni untuk diexport.");
@@ -506,11 +513,16 @@ export default function TenantsPage() {
                 <TableHead>Tenant</TableHead>
                 <TableHead>Properti</TableHead>
                 <TableHead>
-                  <Button variant="ghost" size="sm" className="-ml-3 h-8 gap-2 px-3" onClick={handleRoomSortToggle}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-3 h-8 gap-2 px-3"
+                    onClick={() => handleSortToggle("roomNumber")}
+                  >
                     Kamar
-                    {roomSortOrder === "desc" ? (
+                    {sortBy === "roomNumber" && sortOrder === "desc" ? (
                       <ArrowDownAZ className="h-4 w-4" />
-                    ) : roomSortOrder === "asc" ? (
+                    ) : sortBy === "roomNumber" && sortOrder === "asc" ? (
                       <ArrowUpAZ className="h-4 w-4" />
                     ) : (
                       <ArrowUpDown className="h-4 w-4" />
@@ -519,7 +531,23 @@ export default function TenantsPage() {
                 </TableHead>
                 <TableHead>Check-in</TableHead>
                 <TableHead>Akhir Periode</TableHead>
-                <TableHead>Next Due</TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-3 h-8 gap-2 px-3"
+                    onClick={() => handleSortToggle("nextDueDate")}
+                  >
+                    Next Due
+                    {sortBy === "nextDueDate" && sortOrder === "desc" ? (
+                      <ArrowDownAZ className="h-4 w-4" />
+                    ) : sortBy === "nextDueDate" && sortOrder === "asc" ? (
+                      <ArrowUpAZ className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>Status Tagihan</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
