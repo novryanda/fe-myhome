@@ -123,8 +123,10 @@ export default function OrderPage() {
 
   const [bookingPage, setBookingPage] = useState(1);
   const [bookingPageSize, setBookingPageSize] = useState(10);
+  const [bookingMonth, setBookingMonth] = useState("");
   const [paymentPage, setPaymentPage] = useState(1);
   const [paymentPageSize, setPaymentPageSize] = useState(10);
+  const [paymentMonth, setPaymentMonth] = useState("");
   const [isExportingBookings, setIsExportingBookings] = useState(false);
   const [isExportingPayments, setIsExportingPayments] = useState(false);
   const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentRow | null>(null);
@@ -139,10 +141,15 @@ export default function OrderPage() {
   };
 
   const bookingQuery = useQuery({
-    queryKey: ["dashboard-bookings", bookingPage, bookingPageSize, deferredSearch],
+    queryKey: ["dashboard-bookings", bookingPage, bookingPageSize, deferredSearch, bookingMonth],
     queryFn: async () => {
       const response = await api.get("/api/bookings", {
-        params: { search: deferredSearch, page: bookingPage, size: bookingPageSize },
+        params: {
+          search: deferredSearch,
+          page: bookingPage,
+          size: bookingPageSize,
+          month: bookingMonth || undefined,
+        },
       });
       return response.data;
     },
@@ -160,10 +167,15 @@ export default function OrderPage() {
   });
 
   const paymentQuery = useQuery({
-    queryKey: ["dashboard-payments", paymentPage, paymentPageSize, deferredSearch],
+    queryKey: ["dashboard-payments", paymentPage, paymentPageSize, deferredSearch, paymentMonth],
     queryFn: async () => {
       const response = await api.get("/api/payments", {
-        params: { search: deferredSearch, page: paymentPage, size: paymentPageSize },
+        params: {
+          search: deferredSearch,
+          page: paymentPage,
+          size: paymentPageSize,
+          month: paymentMonth || undefined,
+        },
       });
       return response.data;
     },
@@ -378,6 +390,32 @@ export default function OrderPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-muted-foreground text-xs">Filter Bulan</label>
+                  <Input
+                    type="month"
+                    value={bookingMonth}
+                    onChange={(event) => {
+                      setBookingMonth(event.target.value);
+                      setBookingPage(1);
+                    }}
+                    className="w-44"
+                  />
+                </div>
+                {bookingMonth ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBookingMonth("");
+                      setBookingPage(1);
+                    }}
+                  >
+                    Reset Bulan
+                  </Button>
+                ) : null}
+              </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -480,6 +518,32 @@ export default function OrderPage() {
               <CardDescription>Riwayat pembayaran booking awal dan perpanjangan.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="font-medium text-muted-foreground text-xs">Filter Bulan</label>
+                  <Input
+                    type="month"
+                    value={paymentMonth}
+                    onChange={(event) => {
+                      setPaymentMonth(event.target.value);
+                      setPaymentPage(1);
+                    }}
+                    className="w-44"
+                  />
+                </div>
+                {paymentMonth ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setPaymentMonth("");
+                      setPaymentPage(1);
+                    }}
+                  >
+                    Reset Bulan
+                  </Button>
+                ) : null}
+              </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

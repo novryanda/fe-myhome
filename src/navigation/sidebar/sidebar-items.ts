@@ -4,6 +4,7 @@ import {
   Bed,
   ClipboardCheck,
   Handbag,
+  History,
   HomeIcon,
   LayoutDashboard,
   type LucideIcon,
@@ -101,6 +102,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Order & Transaksi",
         url: "/dashboard/order",
         icon: Handbag,
+        roles: ["SUPERADMIN", "ADMIN"],
+      },
+      {
+        title: "Riwayat Kamar",
+        url: "/dashboard/room-history",
+        icon: History,
         roles: ["SUPERADMIN", "ADMIN"],
       },
       {
