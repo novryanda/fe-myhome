@@ -84,3 +84,32 @@ export type DashboardTransactionRow = {
   paidAt: string | null;
   expiredAt: string | null;
 };
+
+export type TransactionAuditEvent = {
+  id: string;
+  type: string;
+  label: string;
+  timestamp: string | null;
+  actor: { name: string; email: string; role: string } | null;
+  note: string | null;
+  detail?: Record<string, unknown>;
+};
+
+export type TransactionAuditResponse = {
+  transaction: {
+    id: string;
+    bookingCode: string;
+    category: string;
+    status: string;
+    amount: number;
+    paymentType: string | null;
+    tenantName: string;
+    tenantEmail: string;
+    propertyName: string;
+    roomNumber: string;
+    createdAt: string;
+    paidAt: string | null;
+    expiredAt: string | null;
+  };
+  events: TransactionAuditEvent[];
+};

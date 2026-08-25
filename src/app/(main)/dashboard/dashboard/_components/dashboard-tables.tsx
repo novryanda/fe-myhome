@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Download, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { TransactionAuditDialog } from "./transaction-audit-dialog";
 import type { DashboardTransactionsResponse, DashboardUsersResponse } from "./types";
 
 const SKELETON_ROWS = ["user-1", "user-2", "user-3", "user-4", "user-5"] as const;
@@ -164,6 +167,8 @@ export function DashboardTransactionsTable({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  month,
+  onMonthChange,
   onResetFilters,
   onExport,
   response,
@@ -181,6 +186,8 @@ export function DashboardTransactionsTable({
   endDate: string;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  month: string;
+  onMonthChange: (value: string) => void;
   onResetFilters: () => void;
   onExport: () => void;
   response?: DashboardTransactionsResponse;
@@ -192,6 +199,11 @@ export function DashboardTransactionsTable({
   isRefetching: boolean;
   isExporting: boolean;
 }) {
+  const [auditTransaction, setAuditTransaction] = useState<{
+    id: string;
+    bookingCode: string;
+  } | null>(null);
+
   return (
     <Card>
       <CardHeader className="gap-4">
@@ -208,6 +220,8 @@ export function DashboardTransactionsTable({
             endDate={endDate}
             onStartDateChange={onStartDateChange}
             onEndDateChange={onEndDateChange}
+            month={month}
+            onMonthChange={onMonthChange}
             onResetFilters={onResetFilters}
             onExport={onExport}
             isExporting={isExporting}
@@ -231,13 +245,14 @@ export function DashboardTransactionsTable({
                   <TableHead>Nominal</TableHead>
                   <TableHead>Dibuat</TableHead>
                   <TableHead>Paid / Expired</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading
                   ? TRANSACTION_SKELETON_ROWS.map((key) => (
                       <TableRow key={key}>
-                        <TableCell colSpan={9}>
+                        <TableCell colSpan={10}>
                           <Skeleton className="h-10 w-full" />
                         </TableCell>
                       </TableRow>
@@ -265,11 +280,25 @@ export function DashboardTransactionsTable({
                           <div>{dateLabel(transaction.paidAt)}</div>
                           <div className="text-muted-foreground text-xs">{dateLabel(transaction.expiredAt)}</div>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setAuditTransaction({
+                                id: transaction.id,
+                                bookingCode: transaction.bookingCode,
+                              })
+                            }
+                          >
+                            Detail Audit
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                 {!isLoading && !response?.data.length ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
                       Tidak ada transaksi yang cocok.
                     </TableCell>
                   </TableRow>
@@ -287,6 +316,17 @@ export function DashboardTransactionsTable({
           onPageSizeChange={onPageSizeChange}
         />
       </CardContent>
+
+      <TransactionAuditDialog
+        transactionId={auditTransaction?.id ?? null}
+        transactionLabel={auditTransaction?.bookingCode ?? ""}
+        open={!!auditTransaction}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAuditTransaction(null);
+          }
+        }}
+      />
     </Card>
   );
 }
@@ -299,6 +339,8 @@ function DashboardTableToolbar({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  month,
+  onMonthChange,
   onResetFilters,
   onExport,
   isExporting,
@@ -310,12 +352,14 @@ function DashboardTableToolbar({
   endDate: string;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
+  month?: string;
+  onMonthChange?: (value: string) => void;
   onResetFilters: () => void;
   onExport: () => void;
   isExporting: boolean;
 }) {
   const isInvalidPeriod = !!startDate && !!endDate && startDate > endDate;
-  const hasFilters = !!search || !!startDate || !!endDate;
+  const hasFilters = !!search || !!startDate || !!endDate || !!month;
 
   return (
     <div className="flex w-full flex-col gap-3 lg:max-w-3xl lg:items-end">
@@ -330,6 +374,19 @@ function DashboardTableToolbar({
       </div>
       <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
         <div className="grid gap-3 sm:grid-cols-2">
+          {onMonthChange ? (
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label htmlFor="month-filter" className="text-muted-foreground text-xs font-medium">
+                Bulan
+              </label>
+              <Input
+                id="month-filter"
+                type="month"
+                value={month}
+                onChange={(event) => onMonthChange(event.target.value)}
+              />
+            </div>
+          ) : null}
           <Input
             type="date"
             value={startDate}

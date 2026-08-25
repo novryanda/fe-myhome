@@ -13,6 +13,8 @@ import {
   CreditCard,
   ExternalLink,
   History,
+  LogIn,
+  LogOut,
   ReceiptText,
   RefreshCcw,
   UserRound,
@@ -94,6 +96,29 @@ type PaymentHistoryRow = {
 };
 
 type ProofStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+
+type OccupancyHistoryRow = {
+  id: string;
+  bookingCode: string;
+  tenantName: string;
+  tenantEmail: string;
+  tenantPhone?: string | null;
+  checkInAt?: string | Date | null;
+  checkOutAt?: string | Date | null;
+  status: string;
+  isActive: boolean;
+};
+
+type RoomOccupancyHistory = {
+  room: {
+    id: string;
+    roomNumber: string;
+    status: RoomStatus;
+    roomTypeName: string;
+    propertyName: string;
+  };
+  history: OccupancyHistoryRow[];
+};
 
 type ManualPaymentProofDetail = {
   id: string;
@@ -296,6 +321,18 @@ export default function RoomUnitDetailClient({ roomId }: RoomUnitDetailClientPro
 
   const room = roomQuery.data;
 
+  // 3. Fetch Occupancy History (siapa masuk / keluar)
+  const occupancyHistoryQuery = useQuery({
+    queryKey: ["room-occupancy-history", roomId],
+    queryFn: async () => {
+      const response = await api.get(`/api/room-types/rooms/${roomId}/history`);
+      return response.data?.data as RoomOccupancyHistory;
+    },
+    enabled: !!roomId,
+  });
+
+  const occupancyHistory = useMemo(() => occupancyHistoryQuery.data?.history ?? [], [occupancyHistoryQuery.data]);
+
   // 2. Fetch Payment History
   const paymentHistoryQuery = useQuery({
     queryKey: ["room-payment-history-page", roomId, "PAID", page, pageSize],
@@ -400,6 +437,7 @@ export default function RoomUnitDetailClient({ roomId }: RoomUnitDetailClientPro
             onClick={() => {
               roomQuery.refetch();
               paymentHistoryQuery.refetch();
+              occupancyHistoryQuery.refetch();
             }}
           >
             <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -498,6 +536,93 @@ export default function RoomUnitDetailClient({ roomId }: RoomUnitDetailClientPro
                 <span>Saat ini belum ada penghuni aktif pada kamar ini.</span>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Riwayat Penghuni Section */}
+      <div className="rounded-2xl border border-border/60 shadow-sm bg-card overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-border/50 px-6 py-4.5 lg:flex-row lg:items-center lg:justify-between bg-muted/5">
+          <div className="min-w-0">
+            <div className="font-bold text-base text-foreground flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Riwayat Penghuni (Masuk / Keluar)
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Daftar penghuni yang pernah menempati unit kamar ini beserta tanggal check-in dan check-out.
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div className="overflow-x-auto rounded-xl border border-border/50 shadow-inner">
+            <Table>
+              <TableHeader className="bg-muted/15">
+                <TableRow>
+                  <TableHead className="text-xs font-bold py-3.5">Penghuni</TableHead>
+                  <TableHead className="text-xs font-bold py-3.5">Kode Booking</TableHead>
+                  <TableHead className="text-xs font-bold py-3.5">Masuk (Check-in)</TableHead>
+                  <TableHead className="text-xs font-bold py-3.5">Keluar (Check-out)</TableHead>
+                  <TableHead className="text-xs font-bold py-3.5">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {occupancyHistoryQuery.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
+                      Memuat riwayat penghuni...
+                    </TableCell>
+                  </TableRow>
+                ) : occupancyHistory.length ? (
+                  occupancyHistory.map((entry) => (
+                    <TableRow key={entry.id} className="hover:bg-muted/5 transition-colors">
+                      <TableCell className="align-middle py-3.5">
+                        <div className="font-semibold text-xs text-foreground">{entry.tenantName}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{entry.tenantEmail}</div>
+                      </TableCell>
+                      <TableCell className="align-middle py-3.5">
+                        <div className="font-mono text-[11px] font-semibold text-foreground tracking-wider">
+                          {entry.bookingCode}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-middle py-3.5">
+                        <div className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                          <LogIn className="h-3.5 w-3.5 text-emerald-500" />
+                          {entry.checkInAt ? dateTimeLabel(entry.checkInAt) : "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-middle py-3.5">
+                        {entry.checkOutAt ? (
+                          <div className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                            <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
+                            {dateTimeLabel(entry.checkOutAt)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground font-medium">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-middle py-3.5">
+                        {entry.isActive ? (
+                          <Badge className="bg-emerald-500 hover:bg-emerald-600 border-none text-white text-[10px] px-1.5 py-0.5 w-fit font-bold">
+                            Aktif
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 w-fit font-medium">
+                            Selesai
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
+                      Belum ada riwayat penghuni untuk unit kamar ini.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
       </div>

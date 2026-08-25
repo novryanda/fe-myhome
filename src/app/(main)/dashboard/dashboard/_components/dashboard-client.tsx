@@ -80,6 +80,7 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
   const [transactionsPageSize, setTransactionsPageSize] = React.useState(10);
   const [transactionsStartDate, setTransactionsStartDate] = React.useState("");
   const [transactionsEndDate, setTransactionsEndDate] = React.useState("");
+  const [transactionsMonth, setTransactionsMonth] = React.useState("");
   const [isExportingTransactions, setIsExportingTransactions] = React.useState(false);
   const deferredTransactionsSearch = React.useDeferredValue(transactionsSearch);
 
@@ -105,11 +106,26 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
 
   const handleTransactionsStartDateChange = (value: string) => {
     setTransactionsStartDate(value);
+    if (value) {
+      setTransactionsMonth("");
+    }
     setTransactionsPage(1);
   };
 
   const handleTransactionsEndDateChange = (value: string) => {
     setTransactionsEndDate(value);
+    if (value) {
+      setTransactionsMonth("");
+    }
+    setTransactionsPage(1);
+  };
+
+  const handleTransactionsMonthChange = (value: string) => {
+    setTransactionsMonth(value);
+    if (value) {
+      setTransactionsStartDate("");
+      setTransactionsEndDate("");
+    }
     setTransactionsPage(1);
   };
 
@@ -148,6 +164,7 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
       deferredTransactionsSearch,
       transactionsStartDate,
       transactionsEndDate,
+      transactionsMonth,
       role,
     ],
     queryFn: async () => {
@@ -158,6 +175,7 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
           search: deferredTransactionsSearch,
           startDate: transactionsStartDate || undefined,
           endDate: transactionsEndDate || undefined,
+          month: transactionsMonth || undefined,
         },
       });
       return response.data as DashboardTransactionsResponse;
@@ -212,6 +230,7 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
           search: transactionsSearch || undefined,
           startDate: transactionsStartDate || undefined,
           endDate: transactionsEndDate || undefined,
+          month: transactionsMonth || undefined,
         },
       });
 
@@ -321,10 +340,13 @@ export function DashboardClient({ role }: { role: "ADMIN" | "SUPERADMIN" }) {
           endDate={transactionsEndDate}
           onStartDateChange={handleTransactionsStartDateChange}
           onEndDateChange={handleTransactionsEndDateChange}
+          month={transactionsMonth}
+          onMonthChange={handleTransactionsMonthChange}
           onResetFilters={() => {
             setTransactionsSearch("");
             setTransactionsStartDate("");
             setTransactionsEndDate("");
+            setTransactionsMonth("");
             setTransactionsPage(1);
           }}
           onExport={handleTransactionsExport}

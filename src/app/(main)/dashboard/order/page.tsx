@@ -45,7 +45,13 @@ type BookingRow = {
     roomNumber: string;
   } | null;
   status: string;
+  isSubscription?: boolean;
+  nextDueDate?: string | Date | null;
+  isOverdue?: boolean;
   latestPayment?: {
+    status: string;
+  } | null;
+  initialPayment?: {
     status: string;
   } | null;
   startDate?: string | Date | null;
@@ -247,7 +253,7 @@ export default function OrderPage() {
           "Tipe Kamar": booking.roomType?.name || "-",
           Kamar: booking.room?.roomNumber || "-",
           Status: booking.status,
-          Payment: booking.latestPayment?.status || "-",
+          Payment: booking.initialPayment?.status || "-",
           "Tanggal Mulai": dateLabel(booking.startDate),
           "Akhir Periode": dateLabel(booking.currentPeriodEnd || booking.endDate),
           "Check-in": dateLabel(booking.checkInAt),
@@ -406,9 +412,7 @@ export default function OrderPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={booking.latestPayment?.status === "PAID" ? "default" : "outline"}>
-                              {booking.latestPayment?.status || "-"}
-                            </Badge>
+                            <PaymentBadge booking={booking} />
                           </TableCell>
                           <TableCell>
                             <div>{dateLabel(booking.startDate)}</div>
@@ -590,6 +594,37 @@ export default function OrderPage() {
       />
     </div>
   );
+}
+
+function PaymentBadge({ booking }: { booking: BookingRow }) {
+  const initial = booking.initialPayment;
+  const latest = booking.latestPayment;
+
+  // Booking yang dibuat user (punya pembayaran awal BOOKING)
+  if (initial) {
+    if (initial.status === "PAID") {
+      return <Badge>Lunas</Badge>;
+    }
+    if (initial.status === "PENDING") {
+      return <Badge variant="outline">Menunggu Bayar</Badge>;
+    }
+    return <Badge variant="secondary">Belum Bayar</Badge>;
+  }
+
+  // Booking ditempatkan langsung oleh admin (tanpa pembayaran awal)
+  if (!latest) {
+    return <Badge variant="secondary">Admin</Badge>;
+  }
+  if (latest.status === "PAID") {
+    return <Badge>Lunas</Badge>;
+  }
+  if (latest.status === "PENDING") {
+    return <Badge variant="outline">Menunggu Bayar</Badge>;
+  }
+  if (booking.isOverdue) {
+    return <Badge variant="destructive">Menunggak</Badge>;
+  }
+  return <Badge variant="secondary">Belum Bayar</Badge>;
 }
 
 function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof ClipboardList }) {
