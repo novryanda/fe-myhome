@@ -19,6 +19,7 @@ import { useSession } from "@/lib/auth-client";
 
 import { PageHero } from "../_components/page-hero";
 import { exportRowsToExcel } from "../dashboard/_components/export-excel";
+import { TransactionAuditDialog } from "../dashboard/_components/transaction-audit-dialog";
 
 const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
@@ -33,7 +34,13 @@ const categoryLabelMap: Record<string, string> = {
   PENALTY: "Denda",
 };
 
-const categoryLabel = (category: string) => categoryLabelMap[category] || category;
+const categoryLabel = (payment: PaymentRow) => {
+  // RENT tanpa perpanjangan periode = pembayaran awal (admin-assign)
+  if (payment.category === "RENT" && !payment.extension) {
+    return "Pembayaran Awal";
+  }
+  return categoryLabelMap[payment.category] || payment.category;
+};
 
 const getPaymentPeriod = (payment: PaymentRow) => {
   if (payment.extension?.startDate) {
@@ -73,6 +80,10 @@ type BookingRow = {
   initialPayment?: {
     status: string;
   } | null;
+  payments?: Array<{
+    amount: number;
+    status: string;
+  }>;
   startDate?: string | Date | null;
   endDate?: string | Date | null;
   currentPeriodEnd?: string | Date | null;
@@ -156,6 +167,10 @@ export default function OrderPage() {
   const [isExportingBookings, setIsExportingBookings] = useState(false);
   const [isExportingPayments, setIsExportingPayments] = useState(false);
   const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentRow | null>(null);
+  const [selectedAuditTransaction, setSelectedAuditTransaction] = useState<{
+    id: string;
+    bookingCode: string;
+  } | null>(null);
 
   const canManageCheckIn = session?.user?.role === "ADMIN";
   const canMarkManualPayment = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERADMIN";
@@ -480,6 +495,7 @@ export default function OrderPage() {
                           </TableCell>
                           <TableCell>
                             <PaymentBadge booking={booking} />
+                            <PaymentSummary booking={booking} />
                           </TableCell>
                           <TableCell>
                             <div>{dateLabel(booking.startDate)}</div>
@@ -608,7 +624,7 @@ export default function OrderPage() {
                             ) : null}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{categoryLabel(payment.category)}</Badge>
+                            <Badge variant="secondary">{categoryLabel(payment)}</Badge>
                           </TableCell>
                           <TableCell>
                             <span className="text-xs">{getPaymentPeriod(payment)}</span>
@@ -629,17 +645,29 @@ export default function OrderPage() {
                           </TableCell>
                           {canMarkManualPayment ? (
                             <TableCell className="text-right">
-                              {payment.status === "PENDING" ? (
+                              <div className="flex justify-end gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleOpenManualPaymentDialog(payment)}
+                                  onClick={() =>
+                                    setSelectedAuditTransaction({
+                                      id: payment.id,
+                                      bookingCode: payment.bookingCode,
+                                    })
+                                  }
                                 >
-                                  Tandai Bayar Manual
+                                  Detail Audit
                                 </Button>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">-</span>
-                              )}
+                                {payment.status === "PENDING" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenManualPaymentDialog(payment)}
+                                  >
+                                    Tandai Bayar Manual
+                                  </Button>
+                                ) : null}
+                              </div>
                             </TableCell>
                           ) : null}
                         </TableRow>
@@ -699,6 +727,17 @@ export default function OrderPage() {
           queryClient.invalidateQueries({ queryKey: ["manual-payment-proofs"] });
         }}
       />
+
+      <TransactionAuditDialog
+        transactionId={selectedAuditTransaction?.id ?? null}
+        transactionLabel={selectedAuditTransaction?.bookingCode ?? ""}
+        open={!!selectedAuditTransaction}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedAuditTransaction(null);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -732,6 +771,23 @@ function PaymentBadge({ booking }: { booking: BookingRow }) {
     return <Badge variant="destructive">Menunggak</Badge>;
   }
   return <Badge variant="secondary">Belum Bayar</Badge>;
+}
+
+function PaymentSummary({ booking }: { booking: BookingRow }) {
+  const payments = booking.payments || [];
+  if (!payments.length) {
+    return null;
+  }
+
+  const paidTotal = payments
+    .filter((payment) => payment.status === "PAID")
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  return (
+    <div className="mt-1 text-xs text-muted-foreground">
+      {payments.length} transaksi · {currency(paidTotal)} lunas
+    </div>
+  );
 }
 
 function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof ClipboardList }) {
