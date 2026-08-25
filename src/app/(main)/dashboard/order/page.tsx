@@ -233,6 +233,19 @@ export default function OrderPage() {
     enabled: !!session?.user && session.user.role !== "USER",
   });
 
+  const paymentMonthStatsQuery = useQuery({
+    queryKey: ["dashboard-payments-stats", paymentMonth],
+    queryFn: async () => {
+      const response = await api.get("/api/payments/stats", {
+        params: { month: paymentMonth || undefined },
+      });
+      return response.data.data as { total: number; pending: number; paid: number; paidAmount: number };
+    },
+    enabled: !!session?.user && session.user.role !== "USER",
+  });
+
+  const paymentMonthStats = paymentMonthStatsQuery.data;
+
   const stats = useMemo(() => {
     const bookingStats = bookingStatsQuery.data;
     const paymentStats = paymentStatsQuery.data;
@@ -591,6 +604,22 @@ export default function OrderPage() {
                     Reset Bulan
                   </Button>
                 ) : null}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+                  <span className="text-muted-foreground">Transaksi: </span>
+                  <span className="font-semibold">{paymentMonthStats?.total ?? 0}</span>
+                </div>
+                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+                  <span className="text-muted-foreground">Lunas ({paymentMonthStats?.paid ?? 0}): </span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {currency(paymentMonthStats?.paidAmount ?? 0)}
+                  </span>
+                </div>
+                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+                  <span className="text-muted-foreground">Pending: </span>
+                  <span className="font-semibold">{paymentMonthStats?.pending ?? 0}</span>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <Table>
