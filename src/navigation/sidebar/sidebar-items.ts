@@ -99,7 +99,7 @@ export const sidebarItems: NavGroup[] = [
         roles: ["SUPERADMIN"],
       },
       {
-        title: "Order & Transaksi",
+        title: "Transaksi",
         url: "/dashboard/order",
         icon: Handbag,
         roles: ["SUPERADMIN", "ADMIN"],

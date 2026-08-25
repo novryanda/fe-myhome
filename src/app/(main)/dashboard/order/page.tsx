@@ -1,9 +1,9 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useState } from "react";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, CreditCard, Download, RefreshCcw } from "lucide-react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Clock, CreditCard, Download, type LucideIcon, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminManualPaymentDialog } from "@/components/admin-manual-payment-dialog";
@@ -13,7 +13,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 
@@ -53,43 +52,6 @@ const getPaymentPeriod = (payment: PaymentRow) => {
 };
 
 const fileStamp = () => new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
-
-type BookingRow = {
-  id: string;
-  bookingCode: string;
-  tenant: {
-    name: string;
-    email: string;
-  };
-  property?: {
-    name: string;
-  } | null;
-  roomType?: {
-    name: string;
-  } | null;
-  room?: {
-    roomNumber: string;
-  } | null;
-  status: string;
-  isSubscription?: boolean;
-  nextDueDate?: string | Date | null;
-  isOverdue?: boolean;
-  latestPayment?: {
-    status: string;
-  } | null;
-  initialPayment?: {
-    status: string;
-  } | null;
-  payments?: Array<{
-    amount: number;
-    status: string;
-  }>;
-  startDate?: string | Date | null;
-  endDate?: string | Date | null;
-  currentPeriodEnd?: string | Date | null;
-  checkInAt?: string | Date | null;
-  checkOutAt?: string | Date | null;
-};
 
 type PaymentRow = {
   id: string;
@@ -154,17 +116,12 @@ async function fetchAllPages<T>(path: string, search?: string) {
 export default function OrderPage() {
   const { data: session, isPending } = useSession();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("orders");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
-  const [bookingPage, setBookingPage] = useState(1);
-  const [bookingPageSize, setBookingPageSize] = useState(10);
-  const [bookingMonth, setBookingMonth] = useState("");
   const [paymentPage, setPaymentPage] = useState(1);
   const [paymentPageSize, setPaymentPageSize] = useState(10);
   const [paymentMonth, setPaymentMonth] = useState("");
-  const [isExportingBookings, setIsExportingBookings] = useState(false);
   const [isExportingPayments, setIsExportingPayments] = useState(false);
   const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentRow | null>(null);
   const [selectedAuditTransaction, setSelectedAuditTransaction] = useState<{
@@ -172,40 +129,12 @@ export default function OrderPage() {
     bookingCode: string;
   } | null>(null);
 
-  const canManageCheckIn = session?.user?.role === "ADMIN";
   const canMarkManualPayment = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERADMIN";
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    setBookingPage(1);
     setPaymentPage(1);
   };
-
-  const bookingQuery = useQuery({
-    queryKey: ["dashboard-bookings", bookingPage, bookingPageSize, deferredSearch, bookingMonth],
-    queryFn: async () => {
-      const response = await api.get("/api/bookings", {
-        params: {
-          search: deferredSearch,
-          page: bookingPage,
-          size: bookingPageSize,
-          month: bookingMonth || undefined,
-        },
-      });
-      return response.data;
-    },
-    enabled: !!session?.user && session.user.role !== "USER",
-    placeholderData: keepPreviousData,
-  });
-
-  const bookingStatsQuery = useQuery({
-    queryKey: ["dashboard-bookings-stats"],
-    queryFn: async () => {
-      const response = await api.get("/api/bookings/stats");
-      return response.data.data;
-    },
-    enabled: !!session?.user && session.user.role !== "USER",
-  });
 
   const paymentQuery = useQuery({
     queryKey: ["dashboard-payments", paymentPage, paymentPageSize, deferredSearch, paymentMonth],
@@ -246,33 +175,6 @@ export default function OrderPage() {
 
   const paymentMonthStats = paymentMonthStatsQuery.data;
 
-  const stats = useMemo(() => {
-    const bookingStats = bookingStatsQuery.data;
-    const paymentStats = paymentStatsQuery.data;
-
-    return {
-      totalBookings: bookingStats?.total ?? 0,
-      activeBookings: bookingStats?.active ?? 0,
-      pendingPayments: paymentStats?.pending ?? 0,
-      totalRevenue: paymentStats?.paidAmount ?? 0,
-    };
-  }, [bookingStatsQuery.data, paymentStatsQuery.data]);
-
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: "check-in" | "check-out" }) => {
-      const response = await api.patch(`/api/bookings/${id}/${action}`);
-      return response.data;
-    },
-    onSuccess: (_, variables) => {
-      toast.success(variables.action === "check-in" ? "Check-in berhasil" : "Check-out berhasil");
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-bookings-stats"] });
-    },
-    onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : "Aksi gagal diproses");
-    },
-  });
-
   if (isPending) {
     return (
       <div className="flex h-[calc(100vh-theme(spacing.24))] items-center justify-center">
@@ -294,50 +196,11 @@ export default function OrderPage() {
     );
   }
 
-  const bookings = (bookingQuery.data?.data || []) as BookingRow[];
-  const bookingPaging = bookingQuery.data?.paging;
   const payments = (paymentQuery.data?.data || []) as PaymentRow[];
   const paymentPaging = paymentQuery.data?.paging;
-  const isExportingActiveTab = activeTab === "orders" ? isExportingBookings : isExportingPayments;
-
-  const handleExportBookings = async () => {
-    setIsExportingBookings(true);
-    try {
-      const rows = await fetchAllPages<BookingRow>("/api/bookings", search || undefined);
-
-      if (!rows.length) {
-        toast.error("Tidak ada data order untuk diexport.");
-        return;
-      }
-
-      await exportRowsToExcel(
-        rows.map((booking) => ({
-          Kode: booking.bookingCode,
-          Tenant: booking.tenant?.name || "-",
-          Email: booking.tenant?.email || "-",
-          Properti: booking.property?.name || "-",
-          "Tipe Kamar": booking.roomType?.name || "-",
-          Kamar: booking.room?.roomNumber || "-",
-          Status: booking.status,
-          Payment: booking.initialPayment?.status || "-",
-          "Tanggal Mulai": dateLabel(booking.startDate),
-          "Akhir Periode": dateLabel(booking.currentPeriodEnd || booking.endDate),
-          "Check-in": dateLabel(booking.checkInAt),
-          "Check-out": dateLabel(booking.checkOutAt),
-        })),
-        {
-          fileName: `order-booking-${fileStamp()}.xlsx`,
-          sheetName: "Order",
-        },
-      );
-
-      toast.success("Export order berhasil.");
-    } catch {
-      toast.error("Export order gagal.");
-    } finally {
-      setIsExportingBookings(false);
-    }
-  };
+  const paymentStats = paymentStatsQuery.data as
+    | { total: number; pending: number; paid: number; paidAmount: number }
+    | undefined;
 
   const handleExportPayments = async () => {
     setIsExportingPayments(true);
@@ -356,7 +219,7 @@ export default function OrderPage() {
           Properti: payment.propertyName || "-",
           "Tipe Kamar": payment.roomTypeName || "-",
           Kamar: payment.roomNumber || "-",
-          Kategori: payment.category,
+          Kategori: categoryLabel(payment),
           Status: payment.status,
           Metode: payment.paymentType || "-",
           Nominal: payment.amount,
@@ -366,7 +229,7 @@ export default function OrderPage() {
           "Midtrans Order ID": payment.midtransOrderId || "-",
         })),
         {
-          fileName: `order-transaksi-${fileStamp()}.xlsx`,
+          fileName: `transaksi-${fileStamp()}.xlsx`,
           sheetName: "Transaksi",
         },
       );
@@ -386,8 +249,8 @@ export default function OrderPage() {
   return (
     <div className="space-y-6 p-8 pt-6">
       <PageHero
-        title="Order & Transaksi"
-        description="Pantau seluruh booking, pembayaran, dan aksi operasional kamar."
+        title="Transaksi"
+        description="Seluruh transaksi pembayaran (pembayaran awal, perpanjangan, deposit) dari semua booking."
         action={
           <>
             <Input
@@ -396,21 +259,16 @@ export default function OrderPage() {
               placeholder="Cari booking, tenant, properti, kamar..."
               className="w-[320px]"
             />
-            <Button
-              variant="outline"
-              onClick={activeTab === "orders" ? handleExportBookings : handleExportPayments}
-              disabled={isExportingActiveTab}
-            >
+            <Button variant="outline" onClick={handleExportPayments} disabled={isExportingPayments}>
               <Download className="mr-2 h-4 w-4" />
-              {isExportingActiveTab ? "Mengexport..." : activeTab === "orders" ? "Export Order" : "Export Transaksi"}
+              {isExportingPayments ? "Mengexport..." : "Export Transaksi"}
             </Button>
             <Button
               variant="outline"
               onClick={() => {
-                bookingQuery.refetch();
-                bookingStatsQuery.refetch();
                 paymentQuery.refetch();
                 paymentStatsQuery.refetch();
+                paymentMonthStatsQuery.refetch();
               }}
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
@@ -421,314 +279,169 @@ export default function OrderPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Total Order" value={stats.totalBookings.toString()} icon={ClipboardList} />
-        <SummaryCard title="Booking Aktif" value={stats.activeBookings.toString()} icon={ClipboardList} />
-        <SummaryCard title="Pembayaran Pending" value={stats.pendingPayments.toString()} icon={CreditCard} />
-        <SummaryCard title="Revenue Terkonfirmasi" value={currency(stats.totalRevenue)} icon={CreditCard} />
+        <SummaryCard title="Total Transaksi" value={(paymentStats?.total ?? 0).toString()} icon={CreditCard} />
+        <SummaryCard title="Transaksi Lunas" value={(paymentStats?.paid ?? 0).toString()} icon={CheckCircle2} />
+        <SummaryCard title="Pembayaran Pending" value={(paymentStats?.pending ?? 0).toString()} icon={Clock} />
+        <SummaryCard title="Revenue Terkonfirmasi" value={currency(paymentStats?.paidAmount ?? 0)} icon={CreditCard} />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="orders">Order</TabsTrigger>
-          <TabsTrigger value="payments">Transaksi</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="orders">
-          <Card>
-            <CardHeader>
-              <CardTitle>Daftar Order</CardTitle>
-              <CardDescription>
-                {canManageCheckIn
-                  ? "Seluruh lifecycle booking termasuk yang belum check-in."
-                  : "Seluruh lifecycle booking tanpa aksi operasional check-in/check-out."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="booking-month-filter" className="font-medium text-muted-foreground text-xs">
-                    Filter Bulan
-                  </label>
-                  <Input
-                    id="booking-month-filter"
-                    type="month"
-                    value={bookingMonth}
-                    onChange={(event) => {
-                      setBookingMonth(event.target.value);
-                      setBookingPage(1);
-                    }}
-                    className="w-44"
-                  />
-                </div>
-                {bookingMonth ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setBookingMonth("");
-                      setBookingPage(1);
-                    }}
-                  >
-                    Reset Bulan
-                  </Button>
-                ) : null}
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Kode</TableHead>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Properti</TableHead>
-                      <TableHead>Kamar</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead>Periode</TableHead>
-                      {canManageCheckIn ? <TableHead className="text-right">Aksi</TableHead> : null}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.length ? (
-                      bookings.map((booking) => (
-                        <TableRow key={booking.id}>
-                          <TableCell className="font-medium">{booking.bookingCode}</TableCell>
-                          <TableCell>
-                            <div>{booking.tenant.name}</div>
-                            <div className="text-muted-foreground text-xs">{booking.tenant.email}</div>
-                          </TableCell>
-                          <TableCell>{booking.property?.name}</TableCell>
-                          <TableCell>
-                            <div>{booking.roomType?.name}</div>
-                            <div className="text-muted-foreground text-xs">{booking.room?.roomNumber}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={booking.status === "ACTIVE" ? "default" : "secondary"}>
-                              {booking.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <PaymentBadge booking={booking} />
-                            <PaymentSummary booking={booking} />
-                          </TableCell>
-                          <TableCell>
-                            <div>{dateLabel(booking.startDate)}</div>
-                            <div className="text-muted-foreground text-xs">
-                              {dateLabel(booking.currentPeriodEnd || booking.endDate)}
-                            </div>
-                          </TableCell>
-                          {canManageCheckIn ? (
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                {!booking.checkInAt && booking.status === "ACTIVE" && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => updateStatus.mutate({ id: booking.id, action: "check-in" })}
-                                  >
-                                    Check-in
-                                  </Button>
-                                )}
-                                {booking.checkInAt && !booking.checkOutAt && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => updateStatus.mutate({ id: booking.id, action: "check-out" })}
-                                  >
-                                    Check-out
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          ) : null}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={canManageCheckIn ? 8 : 7}
-                          className="py-8 text-center text-muted-foreground"
-                        >
-                          Tidak ada order yang cocok.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              <OrderTablePagination
-                page={bookingPage}
-                totalPages={bookingPaging?.total_page || 1}
-                pageSize={bookingPageSize}
-                totalItems={bookingPaging?.total_items || 0}
-                onPageChange={setBookingPage}
-                onPageSizeChange={(size) => {
-                  setBookingPageSize(size);
-                  setBookingPage(1);
-                }}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="payments">
-          <Card>
-            <CardHeader>
-              <CardTitle>Daftar Transaksi</CardTitle>
-              <CardDescription>Riwayat pembayaran booking awal dan perpanjangan.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="payment-month-filter" className="font-medium text-muted-foreground text-xs">
-                    Filter Bulan
-                  </label>
-                  <Input
-                    id="payment-month-filter"
-                    type="month"
-                    value={paymentMonth}
-                    onChange={(event) => {
-                      setPaymentMonth(event.target.value);
-                      setPaymentPage(1);
-                    }}
-                    className="w-44"
-                  />
-                </div>
-                {paymentMonth ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setPaymentMonth("");
-                      setPaymentPage(1);
-                    }}
-                  >
-                    Reset Bulan
-                  </Button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                  <span className="text-muted-foreground">Transaksi: </span>
-                  <span className="font-semibold">{paymentMonthStats?.total ?? 0}</span>
-                </div>
-                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                  <span className="text-muted-foreground">Lunas ({paymentMonthStats?.paid ?? 0}): </span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {currency(paymentMonthStats?.paidAmount ?? 0)}
-                  </span>
-                </div>
-                <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                  <span className="text-muted-foreground">Pending: </span>
-                  <span className="font-semibold">{paymentMonthStats?.pending ?? 0}</span>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>Properti</TableHead>
-                      <TableHead>Kategori</TableHead>
-                      <TableHead>Periode</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Metode</TableHead>
-                      <TableHead>Nominal</TableHead>
-                      <TableHead>Paid / Expired</TableHead>
-                      {canMarkManualPayment ? <TableHead className="text-right">Aksi</TableHead> : null}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.length ? (
-                      payments.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
-                            <div className="font-medium">{payment.bookingCode}</div>
-                            <div className="text-muted-foreground text-xs">{payment.roomNumber}</div>
-                          </TableCell>
-                          <TableCell>{payment.tenantName}</TableCell>
-                          <TableCell>
-                            <div>{payment.propertyName || "-"}</div>
-                            {payment.roomTypeName ? (
-                              <div className="text-muted-foreground text-xs">{payment.roomTypeName}</div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{categoryLabel(payment)}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-xs">{getPaymentPeriod(payment)}</span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge>
-                            {payment.latestManualProof ? (
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                Proof: {payment.latestManualProof.status}
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell>{payment.paymentType || "-"}</TableCell>
-                          <TableCell className="font-medium">{currency(payment.amount)}</TableCell>
-                          <TableCell>
-                            <div>{dateLabel(payment.paidAt)}</div>
-                            <div className="text-muted-foreground text-xs">{dateLabel(payment.expiredAt)}</div>
-                          </TableCell>
-                          {canMarkManualPayment ? (
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    setSelectedAuditTransaction({
-                                      id: payment.id,
-                                      bookingCode: payment.bookingCode,
-                                    })
-                                  }
-                                >
-                                  Detail Audit
-                                </Button>
-                                {payment.status === "PENDING" ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleOpenManualPaymentDialog(payment)}
-                                  >
-                                    Tandai Bayar Manual
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          ) : null}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={canMarkManualPayment ? 10 : 9}
-                          className="py-8 text-center text-muted-foreground"
-                        >
-                          Tidak ada transaksi yang cocok.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              <OrderTablePagination
-                page={paymentPage}
-                totalPages={paymentPaging?.total_page || 1}
-                pageSize={paymentPageSize}
-                totalItems={paymentPaging?.total_items || 0}
-                onPageChange={setPaymentPage}
-                onPageSizeChange={(size) => {
-                  setPaymentPageSize(size);
+      <Card>
+        <CardHeader>
+          <CardTitle>Daftar Transaksi</CardTitle>
+          <CardDescription>Riwayat pembayaran booking awal dan perpanjangan.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="payment-month-filter" className="font-medium text-muted-foreground text-xs">
+                Filter Bulan
+              </label>
+              <Input
+                id="payment-month-filter"
+                type="month"
+                value={paymentMonth}
+                onChange={(event) => {
+                  setPaymentMonth(event.target.value);
                   setPaymentPage(1);
                 }}
+                className="w-44"
               />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+            {paymentMonth ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPaymentMonth("");
+                  setPaymentPage(1);
+                }}
+              >
+                Reset Bulan
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+              <span className="text-muted-foreground">Transaksi: </span>
+              <span className="font-semibold">{paymentMonthStats?.total ?? 0}</span>
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+              <span className="text-muted-foreground">Lunas ({paymentMonthStats?.paid ?? 0}): </span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {currency(paymentMonthStats?.paidAmount ?? 0)}
+              </span>
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
+              <span className="text-muted-foreground">Pending: </span>
+              <span className="font-semibold">{paymentMonthStats?.pending ?? 0}</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Properti</TableHead>
+                  <TableHead>Kategori</TableHead>
+                  <TableHead>Periode</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Metode</TableHead>
+                  <TableHead>Nominal</TableHead>
+                  <TableHead>Paid / Expired</TableHead>
+                  {canMarkManualPayment ? <TableHead className="text-right">Aksi</TableHead> : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.length ? (
+                  payments.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell>
+                        <div className="font-medium">{payment.bookingCode}</div>
+                        <div className="text-muted-foreground text-xs">{payment.roomNumber}</div>
+                      </TableCell>
+                      <TableCell>{payment.tenantName}</TableCell>
+                      <TableCell>
+                        <div>{payment.propertyName || "-"}</div>
+                        {payment.roomTypeName ? (
+                          <div className="text-muted-foreground text-xs">{payment.roomTypeName}</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{categoryLabel(payment)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs">{getPaymentPeriod(payment)}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge>
+                        {payment.latestManualProof ? (
+                          <div className="mt-1 text-muted-foreground text-xs">
+                            Proof: {payment.latestManualProof.status}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{payment.paymentType || "-"}</TableCell>
+                      <TableCell className="font-medium">{currency(payment.amount)}</TableCell>
+                      <TableCell>
+                        <div>{dateLabel(payment.paidAt)}</div>
+                        <div className="text-muted-foreground text-xs">{dateLabel(payment.expiredAt)}</div>
+                      </TableCell>
+                      {canMarkManualPayment ? (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setSelectedAuditTransaction({
+                                  id: payment.id,
+                                  bookingCode: payment.bookingCode,
+                                })
+                              }
+                            >
+                              Detail Audit
+                            </Button>
+                            {payment.status === "PENDING" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenManualPaymentDialog(payment)}
+                              >
+                                Tandai Bayar Manual
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={canMarkManualPayment ? 10 : 9}
+                      className="py-8 text-center text-muted-foreground"
+                    >
+                      Tidak ada transaksi yang cocok.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <OrderTablePagination
+            page={paymentPage}
+            totalPages={paymentPaging?.total_page || 1}
+            pageSize={paymentPageSize}
+            totalItems={paymentPaging?.total_items || 0}
+            onPageChange={setPaymentPage}
+            onPageSizeChange={(size) => {
+              setPaymentPageSize(size);
+              setPaymentPage(1);
+            }}
+          />
+        </CardContent>
+      </Card>
 
       <AdminManualPaymentDialog
         open={!!selectedManualPayment}
@@ -771,55 +484,7 @@ export default function OrderPage() {
   );
 }
 
-function PaymentBadge({ booking }: { booking: BookingRow }) {
-  const initial = booking.initialPayment;
-  const latest = booking.latestPayment;
-
-  // Booking yang dibuat user (punya pembayaran awal BOOKING)
-  if (initial) {
-    if (initial.status === "PAID") {
-      return <Badge>Lunas</Badge>;
-    }
-    if (initial.status === "PENDING") {
-      return <Badge variant="outline">Menunggu Bayar</Badge>;
-    }
-    return <Badge variant="secondary">Belum Bayar</Badge>;
-  }
-
-  // Booking ditempatkan langsung oleh admin (tanpa pembayaran awal)
-  if (!latest) {
-    return <Badge variant="secondary">Admin</Badge>;
-  }
-  if (latest.status === "PAID") {
-    return <Badge>Lunas</Badge>;
-  }
-  if (latest.status === "PENDING") {
-    return <Badge variant="outline">Menunggu Bayar</Badge>;
-  }
-  if (booking.isOverdue) {
-    return <Badge variant="destructive">Menunggak</Badge>;
-  }
-  return <Badge variant="secondary">Belum Bayar</Badge>;
-}
-
-function PaymentSummary({ booking }: { booking: BookingRow }) {
-  const payments = booking.payments || [];
-  if (!payments.length) {
-    return null;
-  }
-
-  const paidTotal = payments
-    .filter((payment) => payment.status === "PAID")
-    .reduce((sum, payment) => sum + payment.amount, 0);
-
-  return (
-    <div className="mt-1 text-xs text-muted-foreground">
-      {payments.length} transaksi · {currency(paidTotal)} lunas
-    </div>
-  );
-}
-
-function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: typeof ClipboardList }) {
+function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: LucideIcon }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
