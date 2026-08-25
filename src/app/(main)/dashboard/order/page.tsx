@@ -26,6 +26,25 @@ const currency = (value: number) =>
 const dateLabel = (value?: string | Date | null) =>
   value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(value)) : "-";
 
+const categoryLabelMap: Record<string, string> = {
+  BOOKING: "Pembayaran Awal",
+  RENT: "Perpanjangan Sewa",
+  DEPOSIT: "Deposit",
+  PENALTY: "Denda",
+};
+
+const categoryLabel = (category: string) => categoryLabelMap[category] || category;
+
+const getPaymentPeriod = (payment: PaymentRow) => {
+  if (payment.extension?.startDate) {
+    return `${dateLabel(payment.extension.startDate)} - ${dateLabel(payment.extension.endDate)}`;
+  }
+  if (payment.bookingStartDate) {
+    return `${dateLabel(payment.bookingStartDate)} - ${dateLabel(payment.bookingEndDate)}`;
+  }
+  return "-";
+};
+
 const fileStamp = () => new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
 
 type BookingRow = {
@@ -77,6 +96,13 @@ type PaymentRow = {
   expiredAt?: string | Date | null;
   createdAt?: string | Date | null;
   midtransOrderId?: string | null;
+  bookingStartDate?: string | Date | null;
+  bookingEndDate?: string | Date | null;
+  extension?: {
+    id: string;
+    startDate: string | Date;
+    endDate: string | Date;
+  } | null;
   latestManualProof?: {
     id: string;
     status: "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
@@ -392,8 +418,11 @@ export default function OrderPage() {
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="font-medium text-muted-foreground text-xs">Filter Bulan</label>
+                  <label htmlFor="booking-month-filter" className="font-medium text-muted-foreground text-xs">
+                    Filter Bulan
+                  </label>
                   <Input
+                    id="booking-month-filter"
                     type="month"
                     value={bookingMonth}
                     onChange={(event) => {
@@ -520,8 +549,11 @@ export default function OrderPage() {
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="font-medium text-muted-foreground text-xs">Filter Bulan</label>
+                  <label htmlFor="payment-month-filter" className="font-medium text-muted-foreground text-xs">
+                    Filter Bulan
+                  </label>
                   <Input
+                    id="payment-month-filter"
                     type="month"
                     value={paymentMonth}
                     onChange={(event) => {
@@ -550,7 +582,9 @@ export default function OrderPage() {
                     <TableRow>
                       <TableHead>Order</TableHead>
                       <TableHead>Tenant</TableHead>
+                      <TableHead>Properti</TableHead>
                       <TableHead>Kategori</TableHead>
+                      <TableHead>Periode</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Metode</TableHead>
                       <TableHead>Nominal</TableHead>
@@ -568,7 +602,16 @@ export default function OrderPage() {
                           </TableCell>
                           <TableCell>{payment.tenantName}</TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{payment.category}</Badge>
+                            <div>{payment.propertyName || "-"}</div>
+                            {payment.roomTypeName ? (
+                              <div className="text-muted-foreground text-xs">{payment.roomTypeName}</div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{categoryLabel(payment.category)}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs">{getPaymentPeriod(payment)}</span>
                           </TableCell>
                           <TableCell>
                             <Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge>
@@ -579,7 +622,7 @@ export default function OrderPage() {
                             ) : null}
                           </TableCell>
                           <TableCell>{payment.paymentType || "-"}</TableCell>
-                          <TableCell>{currency(payment.amount)}</TableCell>
+                          <TableCell className="font-medium">{currency(payment.amount)}</TableCell>
                           <TableCell>
                             <div>{dateLabel(payment.paidAt)}</div>
                             <div className="text-muted-foreground text-xs">{dateLabel(payment.expiredAt)}</div>
@@ -604,7 +647,7 @@ export default function OrderPage() {
                     ) : (
                       <TableRow>
                         <TableCell
-                          colSpan={canMarkManualPayment ? 8 : 7}
+                          colSpan={canMarkManualPayment ? 10 : 9}
                           className="py-8 text-center text-muted-foreground"
                         >
                           Tidak ada transaksi yang cocok.
