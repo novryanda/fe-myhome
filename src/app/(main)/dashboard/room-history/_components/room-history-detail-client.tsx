@@ -134,17 +134,19 @@ export default function RoomHistoryDetailClient({ roomId }: { roomId: string }) 
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border bg-muted/5 px-4 py-2.5">
-              <div className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">Nomor Kamar</div>
+              <div className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">Nomor Kamar</div>
               <div className="mt-0.5 font-bold">{data.room.roomNumber}</div>
             </div>
             <div className="rounded-xl border bg-muted/5 px-4 py-2.5">
-              <div className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">Status</div>
+              <div className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">Status</div>
               <div className="mt-1">
                 <Badge variant={statusVariantMap[data.room.status]}>{statusLabelMap[data.room.status]}</Badge>
               </div>
             </div>
             <div className="col-span-2 rounded-xl border bg-muted/5 px-4 py-2.5 sm:col-span-1">
-              <div className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">Total Penghuni</div>
+              <div className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
+                Riwayat Penghuni
+              </div>
               <div className="mt-0.5 font-bold">{data.history.length} orang</div>
             </div>
           </div>
@@ -173,23 +175,23 @@ export default function RoomHistoryDetailClient({ roomId }: { roomId: string }) 
                 <TableBody>
                   {data.history.map((entry) => (
                     <TableRow key={entry.id} className="hover:bg-muted/5">
-                      <TableCell className="align-middle py-3.5">
+                      <TableCell className="py-3.5 align-middle">
                         <div className="flex items-center gap-2 font-semibold text-xs">
                           <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
                           {entry.tenantName}
                         </div>
-                        <div className="mt-0.5 text-muted-foreground text-[10px]">{entry.tenantEmail}</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">{entry.tenantEmail}</div>
                       </TableCell>
-                      <TableCell className="align-middle py-3.5">
-                        <div className="font-mono text-[11px] font-semibold tracking-wider">{entry.bookingCode}</div>
+                      <TableCell className="py-3.5 align-middle">
+                        <div className="font-mono font-semibold text-[11px] tracking-wider">{entry.bookingCode}</div>
                       </TableCell>
-                      <TableCell className="align-middle py-3.5">
+                      <TableCell className="py-3.5 align-middle">
                         <div className="flex items-center gap-1.5 font-medium text-xs">
                           <LogIn className="h-3.5 w-3.5 text-emerald-500" />
                           {entry.checkInAt ? dateTimeLabel(entry.checkInAt) : "-"}
                         </div>
                       </TableCell>
-                      <TableCell className="align-middle py-3.5">
+                      <TableCell className="py-3.5 align-middle">
                         {entry.checkOutAt ? (
                           <div className="flex items-center gap-1.5 font-medium text-xs">
                             <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
@@ -199,7 +201,7 @@ export default function RoomHistoryDetailClient({ roomId }: { roomId: string }) 
                           <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="align-middle py-3.5">
+                      <TableCell className="py-3.5 align-middle">
                         {entry.isActive ? (
                           <Badge className="border-none bg-emerald-500 font-bold text-white">Aktif</Badge>
                         ) : (
