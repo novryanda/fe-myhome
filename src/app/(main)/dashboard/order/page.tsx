@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Clock, CreditCard, Download, type LucideIcon, RefreshCcw } from "lucide-react";
@@ -85,10 +85,10 @@ type PaymentRow = {
   } | null;
 };
 
-async function fetchAllPages<T>(path: string, search?: string) {
+async function fetchAllPages<T>(path: string, params?: Record<string, unknown>) {
   const firstResponse = await api.get(path, {
     params: {
-      search,
+      ...params,
       page: 1,
       size: 100,
     },
@@ -101,7 +101,7 @@ async function fetchAllPages<T>(path: string, search?: string) {
   for (let page = 2; page <= totalPages; page += 1) {
     const response = await api.get(path, {
       params: {
-        search,
+        ...params,
         page,
         size: 100,
       },
@@ -122,6 +122,10 @@ export default function OrderPage() {
   const [paymentPage, setPaymentPage] = useState(1);
   const [paymentPageSize, setPaymentPageSize] = useState(10);
   const [paymentMonth, setPaymentMonth] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [propertyFilter, setPropertyFilter] = useState("ALL");
   const [isExportingPayments, setIsExportingPayments] = useState(false);
   const [selectedManualPayment, setSelectedManualPayment] = useState<PaymentRow | null>(null);
   const [selectedAuditTransaction, setSelectedAuditTransaction] = useState<{
@@ -136,15 +140,54 @@ export default function OrderPage() {
     setPaymentPage(1);
   };
 
+  const hasActiveFilters = Boolean(
+    paymentMonth || startDate || endDate || statusFilter !== "ALL" || propertyFilter !== "ALL" || search,
+  );
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setPaymentMonth("");
+    setStartDate("");
+    setEndDate("");
+    setStatusFilter("ALL");
+    setPropertyFilter("ALL");
+    setPaymentPage(1);
+  };
+
+  const propertiesQuery = useQuery({
+    queryKey: ["order-properties-filter"],
+    queryFn: async () => {
+      const response = await api.get("/api/properties", {
+        params: { page: 1, size: 100 },
+      });
+      return (response.data?.data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!session?.user && session.user.role !== "USER",
+  });
+
   const paymentQuery = useQuery({
-    queryKey: ["dashboard-payments", paymentPage, paymentPageSize, deferredSearch, paymentMonth],
+    queryKey: [
+      "dashboard-payments",
+      paymentPage,
+      paymentPageSize,
+      deferredSearch,
+      paymentMonth,
+      startDate,
+      endDate,
+      statusFilter,
+      propertyFilter,
+    ],
     queryFn: async () => {
       const response = await api.get("/api/payments", {
         params: {
-          search: deferredSearch,
+          search: deferredSearch || undefined,
           page: paymentPage,
           size: paymentPageSize,
           month: paymentMonth || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+          propertyId: propertyFilter === "ALL" ? undefined : propertyFilter,
         },
       });
       return response.data;
@@ -154,26 +197,46 @@ export default function OrderPage() {
   });
 
   const paymentStatsQuery = useQuery({
-    queryKey: ["dashboard-payments-stats"],
-    queryFn: async () => {
-      const response = await api.get("/api/payments/stats");
-      return response.data.data;
-    },
-    enabled: !!session?.user && session.user.role !== "USER",
-  });
-
-  const paymentMonthStatsQuery = useQuery({
-    queryKey: ["dashboard-payments-stats", paymentMonth],
+    queryKey: [
+      "dashboard-payments-stats",
+      deferredSearch,
+      paymentMonth,
+      startDate,
+      endDate,
+      statusFilter,
+      propertyFilter,
+    ],
     queryFn: async () => {
       const response = await api.get("/api/payments/stats", {
-        params: { month: paymentMonth || undefined },
+        params: {
+          search: deferredSearch || undefined,
+          month: paymentMonth || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          status: statusFilter === "ALL" ? undefined : statusFilter,
+          propertyId: propertyFilter === "ALL" ? undefined : propertyFilter,
+        },
       });
       return response.data.data as { total: number; pending: number; paid: number; paidAmount: number };
     },
     enabled: !!session?.user && session.user.role !== "USER",
   });
 
-  const paymentMonthStats = paymentMonthStatsQuery.data;
+  const filterSubtitle = useMemo(() => {
+    if (paymentMonth) {
+      return `Bulan: ${paymentMonth}`;
+    }
+    if (startDate && endDate) {
+      return `${dateLabel(startDate)} - ${dateLabel(endDate)}`;
+    }
+    if (startDate) {
+      return `Mulai: ${dateLabel(startDate)}`;
+    }
+    if (endDate) {
+      return `Sampai: ${dateLabel(endDate)}`;
+    }
+    return "Semua waktu";
+  }, [paymentMonth, startDate, endDate]);
 
   if (isPending) {
     return (
@@ -198,18 +261,35 @@ export default function OrderPage() {
 
   const payments = (paymentQuery.data?.data || []) as PaymentRow[];
   const paymentPaging = paymentQuery.data?.paging;
-  const paymentStats = paymentStatsQuery.data as
-    | { total: number; pending: number; paid: number; paidAmount: number }
-    | undefined;
+  const paymentStats = paymentStatsQuery.data;
 
   const handleExportPayments = async () => {
+    if (startDate && endDate && startDate > endDate) {
+      toast.error("Periode tanggal tidak valid (tanggal mulai melebihi tanggal akhir).");
+      return;
+    }
+
     setIsExportingPayments(true);
     try {
-      const rows = await fetchAllPages<PaymentRow>("/api/payments", search || undefined);
+      const rows = await fetchAllPages<PaymentRow>("/api/payments", {
+        search: search || undefined,
+        month: paymentMonth || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        propertyId: propertyFilter === "ALL" ? undefined : propertyFilter,
+      });
 
       if (!rows.length) {
         toast.error("Tidak ada data transaksi untuk diexport.");
         return;
+      }
+
+      let filePrefix = "transaksi";
+      if (paymentMonth) {
+        filePrefix = `transaksi-${paymentMonth}`;
+      } else if (startDate || endDate) {
+        filePrefix = `transaksi-${startDate || "awal"}_sd_${endDate || "akhir"}`;
       }
 
       await exportRowsToExcel(
@@ -229,7 +309,7 @@ export default function OrderPage() {
           "Midtrans Order ID": payment.midtransOrderId || "-",
         })),
         {
-          fileName: `transaksi-${fileStamp()}.xlsx`,
+          fileName: `${filePrefix}-${fileStamp()}.xlsx`,
           sheetName: "Transaksi",
         },
       );
@@ -268,7 +348,6 @@ export default function OrderPage() {
               onClick={() => {
                 paymentQuery.refetch();
                 paymentStatsQuery.refetch();
-                paymentMonthStatsQuery.refetch();
               }}
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
@@ -279,10 +358,30 @@ export default function OrderPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Total Transaksi" value={(paymentStats?.total ?? 0).toString()} icon={CreditCard} />
-        <SummaryCard title="Transaksi Lunas" value={(paymentStats?.paid ?? 0).toString()} icon={CheckCircle2} />
-        <SummaryCard title="Pembayaran Pending" value={(paymentStats?.pending ?? 0).toString()} icon={Clock} />
-        <SummaryCard title="Revenue Terkonfirmasi" value={currency(paymentStats?.paidAmount ?? 0)} icon={CreditCard} />
+        <SummaryCard
+          title="Total Transaksi"
+          value={(paymentStats?.total ?? 0).toString()}
+          subtitle={filterSubtitle}
+          icon={CreditCard}
+        />
+        <SummaryCard
+          title="Transaksi Lunas"
+          value={(paymentStats?.paid ?? 0).toString()}
+          subtitle={filterSubtitle}
+          icon={CheckCircle2}
+        />
+        <SummaryCard
+          title="Pembayaran Pending"
+          value={(paymentStats?.pending ?? 0).toString()}
+          subtitle={filterSubtitle}
+          icon={Clock}
+        />
+        <SummaryCard
+          title="Revenue Terkonfirmasi"
+          value={currency(paymentStats?.paidAmount ?? 0)}
+          subtitle={filterSubtitle}
+          icon={CreditCard}
+        />
       </div>
 
       <Card>
@@ -302,39 +401,110 @@ export default function OrderPage() {
                 value={paymentMonth}
                 onChange={(event) => {
                   setPaymentMonth(event.target.value);
+                  if (event.target.value) {
+                    setStartDate("");
+                    setEndDate("");
+                  }
                   setPaymentPage(1);
                 }}
-                className="w-44"
+                className="w-40"
               />
             </div>
-            {paymentMonth ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setPaymentMonth("");
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="payment-start-date" className="font-medium text-muted-foreground text-xs">
+                Dari Tanggal
+              </label>
+              <Input
+                id="payment-start-date"
+                type="date"
+                value={startDate}
+                onChange={(event) => {
+                  setStartDate(event.target.value);
+                  if (event.target.value) {
+                    setPaymentMonth("");
+                  }
+                  setPaymentPage(1);
+                }}
+                className="w-40"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="payment-end-date" className="font-medium text-muted-foreground text-xs">
+                Sampai Tanggal
+              </label>
+              <Input
+                id="payment-end-date"
+                type="date"
+                value={endDate}
+                onChange={(event) => {
+                  setEndDate(event.target.value);
+                  if (event.target.value) {
+                    setPaymentMonth("");
+                  }
+                  setPaymentPage(1);
+                }}
+                className="w-40"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="payment-status-filter" className="font-medium text-muted-foreground text-xs">
+                Status
+              </label>
+              <Select
+                value={statusFilter}
+                onValueChange={(val) => {
+                  setStatusFilter(val);
                   setPaymentPage(1);
                 }}
               >
-                Reset Bulan
+                <SelectTrigger id="payment-status-filter" className="w-36">
+                  <SelectValue placeholder="Semua Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Semua Status</SelectItem>
+                  <SelectItem value="PAID">Lunas (PAID)</SelectItem>
+                  <SelectItem value="PENDING">Pending (PENDING)</SelectItem>
+                  <SelectItem value="EXPIRED">Kedaluwarsa (EXPIRED)</SelectItem>
+                  <SelectItem value="CANCELLED">Dibatalkan (CANCELLED)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {propertiesQuery.data && propertiesQuery.data.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                <label htmlFor="payment-property-filter" className="font-medium text-muted-foreground text-xs">
+                  Properti
+                </label>
+                <Select
+                  value={propertyFilter}
+                  onValueChange={(val) => {
+                    setPropertyFilter(val);
+                    setPaymentPage(1);
+                  }}
+                >
+                  <SelectTrigger id="payment-property-filter" className="w-44">
+                    <SelectValue placeholder="Semua Properti" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua Properti</SelectItem>
+                    {propertiesQuery.data.map((prop) => (
+                      <SelectItem key={prop.id} value={prop.id}>
+                        {prop.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+
+            {hasActiveFilters ? (
+              <Button variant="outline" size="sm" onClick={handleResetFilters}>
+                Reset Filter
               </Button>
             ) : null}
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-              <span className="text-muted-foreground">Transaksi: </span>
-              <span className="font-semibold">{paymentMonthStats?.total ?? 0}</span>
-            </div>
-            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-              <span className="text-muted-foreground">Lunas ({paymentMonthStats?.paid ?? 0}): </span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {currency(paymentMonthStats?.paidAmount ?? 0)}
-              </span>
-            </div>
-            <div className="rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-              <span className="text-muted-foreground">Pending: </span>
-              <span className="font-semibold">{paymentMonthStats?.pending ?? 0}</span>
-            </div>
           </div>
           <div className="overflow-x-auto">
             <Table>
@@ -484,7 +654,17 @@ export default function OrderPage() {
   );
 }
 
-function SummaryCard({ title, value, icon: Icon }: { title: string; value: string; icon: LucideIcon }) {
+function SummaryCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  icon: LucideIcon;
+}) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -493,6 +673,7 @@ function SummaryCard({ title, value, icon: Icon }: { title: string; value: strin
       </CardHeader>
       <CardContent>
         <div className="font-bold text-2xl">{value}</div>
+        {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
       </CardContent>
     </Card>
   );
