@@ -104,7 +104,7 @@ export function UserFormModal({ isOpen, onClose, onSubmit, initialData, title, d
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="john@example.com" {...field} disabled={!!initialData} />
+                    <Input type="email" placeholder="john@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
